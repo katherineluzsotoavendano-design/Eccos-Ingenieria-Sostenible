@@ -88,23 +88,39 @@ export const saveToExternalDatabase = async (record: FinancialRecord): Promise<A
   try {
     const { error } = await supabase.from('financial_records').insert([record]);
     if (error) {
-      if (error.message.includes('column') || error.message.includes('schema cache')) {
-        throw new Error("⚠️ ERROR DE ESQUEMA: Debes ejecutar el script SQL de actualización en el dashboard de Supabase.");
+      console.error("Supabase Error Details:", error);
+      if (error.message.includes('column') || error.message.includes('schema cache') || error.code === '42703') {
+        throw new Error("⚠️ ERROR DE ESQUEMA: Debes ejecutar el script SQL de actualización en el dashboard de Supabase. La tabla no reconoce los nuevos campos como flowType o isPaid.");
       }
       throw error;
     }
     return { success: true };
   } catch (e: any) {
+    console.error("Critical Database Error:", e);
     return { success: false, error: e.message };
   }
 };
 
 export const fetchRecordsFromExternalDatabase = async (): Promise<FinancialRecord[]> => {
-  const { data } = await supabase.from('financial_records').select('*').order('createdAt', { ascending: false });
-  return (data as FinancialRecord[]) || [];
+  try {
+    const { data, error } = await supabase.from('financial_records').select('*').order('createdAt', { ascending: false });
+    if (error) {
+       console.error("Error fetching records:", error);
+       return [];
+    }
+    return (data as FinancialRecord[]) || [];
+  } catch (e) {
+    console.error("Fetch Exception:", e);
+    return [];
+  }
 };
 
 export const updateRecordInDatabase = async (id: string, updates: Partial<FinancialRecord>): Promise<ApiResponse<void>> => {
-  const { error } = await supabase.from('financial_records').update(updates).eq('id', id);
-  return { success: !error, error: error?.message };
+  try {
+    const { error } = await supabase.from('financial_records').update(updates).eq('id', id);
+    if (error) console.error("Update Error:", error);
+    return { success: !error, error: error?.message };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
 };
