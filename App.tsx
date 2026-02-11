@@ -7,6 +7,7 @@ import {
   isApiKeyConfigured,
   updateRecordInDatabase
 } from './services/geminiService';
+import { saveToGoogleSheets } from './services/googleSheetsService';
 import { FinancialRecord, ExtractedData, TransactionCategory, OperationState, BankMovement } from './types';
 import ClassificationForm from './components/ClassificationForm';
 import ManagementTable from './components/ManagementTable';
@@ -21,7 +22,6 @@ enum AppView {
 }
 
 const App: React.FC = () => {
-  // Cambiamos la vista inicial a UPLOAD ya que Dashboard ahora es la última sección
   const [view, setView] = useState<AppView>(AppView.UPLOAD);
   const [preCategory, setPreCategory] = useState<TransactionCategory | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -86,14 +86,19 @@ const App: React.FC = () => {
   const onRecordSaved = async (record: FinancialRecord) => {
     setIsSyncing(true);
     try {
-      const result = await saveToExternalDatabase(record);
-      if (result.success) {
+      // Guardar en Supabase
+      const dbResult = await saveToExternalDatabase(record);
+      
+      // Intentar guardar en Google Sheets (Backup / Control)
+      saveToGoogleSheets(record).catch(err => console.error("Sheets Sync background error", err));
+
+      if (dbResult.success) {
         const updated = [record, ...records];
         setRecords(updated);
         localStorage.setItem('fincore_records', JSON.stringify(updated));
-        setSuccessMessage("✅ Documento clasificado y guardado en Supabase.");
+        setSuccessMessage("✅ Documento guardado en Supabase y sincronizado con Sheets.");
       } else {
-        alert(`Error: ${result.error}`);
+        alert(`Error: ${dbResult.error}`);
       }
     } catch (e) {
       alert("Error de red al sincronizar.");
@@ -145,7 +150,7 @@ const App: React.FC = () => {
       {isSyncing && (
         <div className="bg-blue-600 text-white text-[8px] font-black uppercase tracking-[0.3em] py-1 flex items-center justify-center gap-2">
           <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></div>
-          Sincronizando Nube Supabase
+          Sincronizando Multi-Cloud (Supabase + Sheets)
         </div>
       )}
 
