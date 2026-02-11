@@ -59,7 +59,12 @@ export const saveToExternalDatabase = async (record: FinancialRecord): Promise<A
       .from('financial_records')
       .insert([record]);
 
-    if (error) throw error;
+    if (error) {
+      if (error.message.includes('schema cache')) {
+        throw new Error("La tabla 'financial_records' no existe en Supabase. Por favor, ejecuta el script SQL de creación en el panel de Supabase.");
+      }
+      throw error;
+    }
     return { success: true };
   } catch (e: any) {
     console.error("Supabase Save Error:", e);
@@ -78,7 +83,6 @@ export const fetchRecordsFromExternalDatabase = async (): Promise<FinancialRecor
     return (data as FinancialRecord[]) || [];
   } catch (e) {
     console.error("Supabase Fetch Error:", e);
-    // Fallback to local storage if offline or error
     const saved = localStorage.getItem('fincore_records');
     return saved ? JSON.parse(saved) : [];
   }
