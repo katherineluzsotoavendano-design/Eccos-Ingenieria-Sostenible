@@ -24,11 +24,9 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   
-  // Login States
+  // Login/Register States
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPass, setLoginPass] = useState('');
-  
-  // Register States
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPass, setRegPass] = useState('');
@@ -59,12 +57,6 @@ const App: React.FC = () => {
     loadInitialData();
   }, []);
 
-  const getMonthName = (dateStr: string) => {
-    const months = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
-    const monthIndex = parseInt(dateStr.split('-')[1]) - 1;
-    return months[monthIndex] || "OTROS";
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
@@ -73,7 +65,7 @@ const App: React.FC = () => {
       setUser(res.data);
       localStorage.setItem('fincore_session', JSON.stringify(res.data));
     } else {
-      alert(res.error || "Credenciales incorrectas. Verifica tu email y contraseña.");
+      alert(res.error || "Credenciales incorrectas.");
     }
     setIsLoggingIn(false);
   };
@@ -83,11 +75,11 @@ const App: React.FC = () => {
     setIsLoggingIn(true);
     const res = await registerUser(regName, regEmail, regPass, regRole);
     if (res.success) {
-      alert("¡Usuario registrado con éxito! Ahora puedes iniciar sesión.");
+      alert("¡Usuario registrado! Ahora puedes iniciar sesión.");
       setIsRegisterMode(false);
       setLoginEmail(regEmail);
     } else {
-      alert(res.error || "Error al registrar usuario.");
+      alert(res.error || "Error al registrar.");
     }
     setIsLoggingIn(false);
   };
@@ -120,26 +112,31 @@ const App: React.FC = () => {
 
   const onRecordSaved = async (record: FinancialRecord) => {
     setIsSyncing(true);
-    const month = getMonthName(record.date);
     
-    await saveToExternalDatabase(record);
-    
-    saveToGoogleSheets(record, currentFileBase64 || undefined, currentFileMime || undefined)
-      .then(() => {
-        setRecords([record, ...records]);
-        setSuccessMessage(`✅ Documento organizado en la carpeta "${month}" de Drive.`);
-      })
-      .catch(() => {
-        setRecords([record, ...records]);
-        setSuccessMessage("✅ Registro guardado (Sincronización Cloud pendiente)");
-      })
-      .finally(() => {
-        setIsSyncing(false);
-        setExtractedData(null);
-        setPreCategory(null);
-        setCurrentFileBase64(null);
-        setCurrentFileMime(null);
-      });
+    try {
+      // 1. Guardar en Base de Datos Principal (Supabase)
+      await saveToExternalDatabase(record);
+      
+      // 2. Sincronizar con Google Sheets y Drive
+      const cloudRes = await saveToGoogleSheets(record, currentFileBase64 || undefined, currentFileMime || undefined);
+      
+      if (cloudRes.success) {
+        setSuccessMessage("✅ Registro completado y archivo guardado en Google Drive.");
+      } else {
+        setSuccessMessage("✅ Registro local guardado. (Sincronización Cloud pendiente)");
+      }
+      
+      setRecords([record, ...records]);
+    } catch (err) {
+      console.error(err);
+      alert("Hubo un problema al guardar el registro.");
+    } finally {
+      setIsSyncing(false);
+      setExtractedData(null);
+      setPreCategory(null);
+      setCurrentFileBase64(null);
+      setCurrentFileMime(null);
+    }
   };
 
   if (!user) {
@@ -149,14 +146,12 @@ const App: React.FC = () => {
           <div className="flex justify-center mb-8">
             <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black italic text-2xl shadow-xl shadow-blue-500/30">F</div>
           </div>
-          
           <h2 className="text-2xl font-black text-center tracking-tighter uppercase mb-1">
             {isRegisterMode ? 'Crear Cuenta' : 'Acceso Central'}
           </h2>
           <p className="text-slate-400 text-center font-bold text-[9px] uppercase tracking-widest mb-8">
             Fincore AI - Treasury Intelligence
           </p>
-
           <form onSubmit={isRegisterMode ? handleRegister : handleLogin} className="space-y-4">
             {isRegisterMode && (
               <div className="space-y-1">
@@ -164,17 +159,14 @@ const App: React.FC = () => {
                 <input type="text" required value={regName} onChange={e => setRegName(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 font-bold text-sm outline-none transition-all" placeholder="Juan Pérez" />
               </div>
             )}
-            
             <div className="space-y-1">
               <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Email Corporativo</label>
               <input type="email" required value={isRegisterMode ? regEmail : loginEmail} onChange={e => isRegisterMode ? setRegEmail(e.target.value) : setLoginEmail(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 font-bold text-sm outline-none transition-all" placeholder="usuario@fincore.com" />
             </div>
-
             <div className="space-y-1">
               <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Contraseña</label>
               <input type="password" required value={isRegisterMode ? regPass : loginPass} onChange={e => isRegisterMode ? setRegPass(e.target.value) : setLoginPass(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 font-bold text-sm outline-none transition-all" placeholder="••••••••" />
             </div>
-
             {isRegisterMode && (
               <div className="space-y-1">
                 <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Rol en Sistema</label>
@@ -185,17 +177,12 @@ const App: React.FC = () => {
                 </select>
               </div>
             )}
-
             <button disabled={isLoggingIn} type="submit" className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 transition-all shadow-xl disabled:opacity-50 mt-4">
               {isLoggingIn ? 'Procesando...' : (isRegisterMode ? 'Registrar Usuario' : 'Iniciar Sesión')}
             </button>
           </form>
-
           <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-            <button 
-              onClick={() => setIsRegisterMode(!isRegisterMode)} 
-              className="text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-700"
-            >
+            <button onClick={() => setIsRegisterMode(!isRegisterMode)} className="text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-700">
               {isRegisterMode ? '¿Ya tienes cuenta? Ingresa aquí' : '¿No tienes cuenta? Regístrate'}
             </button>
           </div>
@@ -236,10 +223,10 @@ const App: React.FC = () => {
               <div className="bg-white p-24 rounded-[60px] shadow-2xl text-center border border-slate-100 animate-fadeIn">
                 <div className="w-24 h-24 border-[12px] border-slate-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-10"></div>
                 <h2 className="text-3xl font-black uppercase tracking-tighter">
-                  {isSyncing ? 'Archivando Documento...' : 'Analizando con IA...'}
+                  {isSyncing ? 'Guardando en la Nube...' : 'Analizando con IA...'}
                 </h2>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-4">
-                  {isSyncing ? 'Organizando en carpetas mensuales de Drive' : 'Extrayendo datos fiscales'}
+                  {isSyncing ? 'Sincronizando con Google Drive y Sheets' : 'Extrayendo datos fiscales'}
                 </p>
               </div>
             ) : successMessage ? (
