@@ -10,14 +10,41 @@ export enum OperationState {
   OBSERVADO = 'OBSERVADO'
 }
 
+export enum PaymentMode {
+  CONTADO = 'CONTADO',
+  CREDITO = 'CREDITO'
+}
+
+export enum FlowType {
+  CFO = 'CFO',
+  CFI = 'CFI',
+  CFF = 'CFF'
+}
+
+export type IncomeType = 'VENTAS' | 'PRÉSTAMOS' | 'CAMBIO DE MONEDA' | 'INGRESOS FINANCIEROS';
+export type ServiceLine = 'Capacitaciones Ágiles/Presenciales' | 'Consultoría Ambiental' | 'Consultoría SIG' | 'Auditoría Tradicional' | 'Auditorías 360' | 'ECCOS GASTO';
+export type CostType = 'FIJO' | 'VARIABLE';
+export type Responsible = 'NATHALIA' | 'JOSÉ' | 'PAGO DIRECTO';
+
 export interface ExtractedData {
-  vendor: string;
+  vendor: string; 
+  taxId: string; 
   date: string;
   amount: number;
   currency: string;
-  taxId: string;
   invoiceNumber: string;
   categorySuggest: string;
+  detractionAmount?: number;
+  paymentMode?: PaymentMode;
+  creditDate?: string;
+  flowType?: FlowType;
+  incomeType?: IncomeType;
+  serviceLine?: ServiceLine;
+  costType?: CostType;
+  responsible?: Responsible;
+  voucherAmount?: number;
+  voucherDate?: string;
+  paidDate?: string; // Fecha en la que realmente ingresó/salió el dinero
 }
 
 export interface FinancialRecord extends ExtractedData {
