@@ -1,9 +1,10 @@
+
 import { FinancialRecord, ApiResponse, User, UserRole } from "../types";
 
 /**
- * URL de la Aplicación Web de Google Apps Script (Versión más reciente proporcionada).
+ * URL de la Aplicación Web de Google Apps Script (Versión Actualizada).
  */
-const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwNYOM-xwyfkU2Hkr37cvoCMZ1tiKUHPhovCohvy_tw1AUVy0P5Y3OAGNPmvHlLtueIiQ/exec';
+const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbyewl1N9HrBEMepNHrNETAIwcY5H7XRYBbigq0cfP1uIVit8gX4qjSu1RcXcYM7O9zOSg/exec';
 
 /**
  * Autentica al usuario contra la base de datos de Google Sheets.
@@ -21,10 +22,11 @@ export const loginUser = async (email: string, password: string): Promise<ApiRes
       const result = JSON.parse(text);
       return result.success ? { success: true, data: result.user } : { success: false, error: result.error };
     } catch (e) {
-      return { success: false, error: "El servidor devolvió una respuesta inesperada." };
+      console.error("Server raw response:", text);
+      return { success: false, error: "Error en el servidor de Google: " + (text.substring(0, 50) || "Respuesta vacía") };
     }
   } catch (e: any) {
-    return { success: false, error: "Error de conexión." };
+    return { success: false, error: "Error de conexión con el servicio de autenticación." };
   }
 };
 
@@ -44,10 +46,10 @@ export const registerUser = async (name: string, email: string, password: string
       const result = JSON.parse(text);
       return result.success ? { success: true } : { success: false, error: result.error };
     } catch (e) {
-      return { success: false, error: "Error en el registro." };
+      return { success: false, error: "Error al registrar el usuario en la base de datos central." };
     }
   } catch (e: any) {
-    return { success: false, error: "Error de red." };
+    return { success: false, error: "Error de red al intentar el registro." };
   }
 };
 
@@ -61,10 +63,9 @@ export const saveToGoogleSheets = async (
   fileMimeType?: string
 ): Promise<ApiResponse<{ driveUrl?: string }>> => {
   try {
-    // Construimos el payload explícitamente para asegurar que el Apps Script reciba las claves exactas
     const payload = { 
       action: 'save',
-      id: record.id, // Aseguramos que el ID se envíe
+      id: record.id, 
       date: record.date,
       vendor: record.vendor,
       taxId: record.taxId,
@@ -85,18 +86,18 @@ export const saveToGoogleSheets = async (
     });
 
     const text = await response.text();
-    // Apps Script a veces devuelve errores HTML si falla críticamente, capturamos eso.
+    
     if (text.startsWith('<!DOCTYPE html>')) {
-        throw new Error("Error interno del servidor (Apps Script). Verifica los permisos de Drive.");
+        throw new Error("El script devolvió HTML en lugar de JSON. Asegúrate de haber copiado el código de Apps Script completo y haberlo publicado como 'Cualquiera'.");
     }
 
     const result = JSON.parse(text);
     
     return result.success 
       ? { success: true, data: { driveUrl: result.driveUrl } } 
-      : { success: false, error: result.error || "Error desconocido en el script." };
+      : { success: false, error: result.error || "Error desconocido al guardar en la nube." };
   } catch (e: any) {
     console.error("Google Sheets Sync Error:", e);
-    return { success: false, error: e.message || "Error de sincronización con la nube." };
+    return { success: false, error: e.message || "Fallo en la sincronización con Google Drive." };
   }
 };
