@@ -57,7 +57,8 @@ const App: React.FC = () => {
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !preCategory) return;
+    
     if (!isApiKeyConfigured()) {
       alert("⚠️ SISTEMA BLOQUEADO: No se detectó API_KEY en el entorno.");
       return;
@@ -70,7 +71,8 @@ const App: React.FC = () => {
     reader.onload = async () => {
       try {
         const base64 = (reader.result as string).split(',')[1];
-        const result = await processDocument(base64, file.type);
+        // Pasamos preCategory para que la IA sepa qué datos extraer (Emisor vs Destinatario)
+        const result = await processDocument(base64, file.type, preCategory);
         setExtractedData(result);
       } catch (error: any) {
         alert(`Error IA: ${error.message}`);

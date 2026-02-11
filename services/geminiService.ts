@@ -1,35 +1,43 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { ExtractedData, FinancialRecord, ApiResponse, PaymentMode } from "../types";
+import { ExtractedData, FinancialRecord, ApiResponse, TransactionCategory } from "../types";
 import { supabase } from "./supabaseClient";
 
 export const isApiKeyConfigured = (): boolean => {
   return !!process.env.API_KEY;
 };
 
-export const processDocument = async (base64: string, mimeType: string): Promise<ExtractedData> => {
+export const processDocument = async (base64: string, mimeType: string, category: TransactionCategory): Promise<ExtractedData> => {
   if (!process.env.API_KEY) throw new Error("API_KEY is not configured");
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
+  const isIncome = category === TransactionCategory.INGRESO;
+  
+  const systemPrompt = isIncome 
+    ? `EXTRACCIÓN PARA INGRESOS (VENTAS): 
+       Debes extraer los datos del CLIENTE / ADQUIRIENTE (Destinatario del documento). 
+       NO extraigas los datos de la empresa que emite la factura. 
+       Busca etiquetas como: "Señor(es)", "Adquiriente", "Cliente", "Razón Social del Cliente".`
+    : `EXTRACCIÓN PARA EGRESOS (COMPRAS/GASTOS): 
+       Debes extraer los datos del PROVEEDOR (Emisor del documento). 
+       Extrae el RUC y Razón Social que aparece en la cabecera principal como emisor.
+       Busca etiquetas como: "Emisor", "Vendedor", o el logo principal de la empresa proveedora.`;
+
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: {
       parts: [
         { inlineData: { mimeType, data: base64 } },
         {
-          text: `Extract data from this financial invoice. 
-          CRITICAL INSTRUCTION FOR INCOME (FACTURA DE VENTA):
-          - Identify if it's an INCOME (Venta/Ingreso).
-          - If it is an INCOME, YOU MUST EXTRACT THE RECIPIENT'S (CLIENT/CUSTOMER) Business Name (Razón Social) and RUC (taxId). DO NOT extract the issuer's data. 
-          - Look for labels like "Adquiriente", "Cliente", "Señor(es)".
+          text: `${systemPrompt}
           
-          GENERAL EXTRACTION:
-          - Extract total amount, date (YYYY-MM-DD), and currency (PEN, USD).
-          - Extract Invoice Number.
-          - Identify "Detracción" amount if listed.
-          - Determine if "CONTADO" or "CREDITO". If "CREDITO", find the due date.
+          DATOS ADICIONALES A EXTRAER:
+          - Monto total, fecha (YYYY-MM-DD) y moneda (PEN, USD).
+          - Número de factura / Comprobante.
+          - Monto de Detracción si existe.
+          - Condición de pago: "CONTADO" o "CREDITO". Si es crédito, busca la fecha de vencimiento.
           
-          Return JSON following the schema.`
+          Responde estrictamente en formato JSON siguiendo el esquema.`
         }
       ]
     },
@@ -38,8 +46,8 @@ export const processDocument = async (base64: string, mimeType: string): Promise
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          vendor: { type: Type.STRING, description: "Business name of the Client (Income) or Provider (Expense)" },
-          taxId: { type: Type.STRING, description: "RUC of the Client (Income) or Provider (Expense)" },
+          vendor: { type: Type.STRING, description: isIncome ? "Razón Social del CLIENTE" : "Razón Social del PROVEEDOR" },
+          taxId: { type: Type.STRING, description: isIncome ? "RUC del CLIENTE" : "RUC del PROVEEDOR" },
           date: { type: Type.STRING },
           amount: { type: Type.NUMBER },
           currency: { type: Type.STRING },
@@ -90,7 +98,7 @@ export const saveToExternalDatabase = async (record: FinancialRecord): Promise<A
     if (error) {
       console.error("Supabase Error Details:", error);
       if (error.message.includes('column') || error.message.includes('schema cache') || error.code === '42703') {
-        throw new Error("⚠️ ERROR DE ESQUEMA: Debes ejecutar el script SQL de actualización en el dashboard de Supabase. La tabla no reconoce los nuevos campos como flowType o isPaid.");
+        throw new Error("⚠️ ERROR DE ESQUEMA: Debes ejecutar el script SQL de actualización en el dashboard de Supabase.");
       }
       throw error;
     }
