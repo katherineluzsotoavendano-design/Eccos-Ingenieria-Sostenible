@@ -55,13 +55,29 @@ export const processDocument = async (base64: string, mimeType: string): Promise
 
 export const saveToExternalDatabase = async (record: FinancialRecord): Promise<ApiResponse<void>> => {
   try {
+    // Limpiamos el objeto para asegurarnos de que solo enviamos los campos que la tabla espera
+    const cleanRecord = {
+      id: record.id,
+      vendor: record.vendor,
+      date: record.date,
+      amount: record.amount,
+      currency: record.currency,
+      taxId: record.taxId,
+      invoiceNumber: record.invoiceNumber,
+      categorySuggest: record.categorySuggest,
+      category: record.category,
+      operationState: record.operationState,
+      isPaid: record.isPaid,
+      createdAt: record.createdAt
+    };
+
     const { error } = await supabase
       .from('financial_records')
-      .insert([record]);
+      .insert([cleanRecord]);
 
     if (error) {
-      if (error.message.includes('schema cache')) {
-        throw new Error("La tabla 'financial_records' no existe en Supabase. Por favor, ejecuta el script SQL de creación en el panel de Supabase.");
+      if (error.message.includes('schema cache') || error.message.includes('not found')) {
+        throw new Error("⚠️ TABLA NO ENCONTRADA: Debes ejecutar el script SQL en el panel de Supabase para crear la tabla 'financial_records'.");
       }
       throw error;
     }
