@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
 import { ExtractedData, FinancialRecord, ApiResponse } from "../types";
+import { supabase } from "./supabaseClient";
 
 export const isApiKeyConfigured = (): boolean => {
   return !!process.env.API_KEY;
@@ -52,15 +53,48 @@ export const processDocument = async (base64: string, mimeType: string): Promise
   return JSON.parse(text) as ExtractedData;
 };
 
-// Mock persistent storage simulation
 export const saveToExternalDatabase = async (record: FinancialRecord): Promise<ApiResponse<void>> => {
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 800));
-  return { success: true };
+  try {
+    const { error } = await supabase
+      .from('financial_records')
+      .insert([record]);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (e: any) {
+    console.error("Supabase Save Error:", e);
+    return { success: false, error: e.message };
+  }
 };
 
 export const fetchRecordsFromExternalDatabase = async (): Promise<FinancialRecord[]> => {
-  // In a real app, this would be a fetch call to a backend
-  const saved = localStorage.getItem('fincore_records');
-  return saved ? JSON.parse(saved) : [];
+  try {
+    const { data, error } = await supabase
+      .from('financial_records')
+      .select('*')
+      .order('createdAt', { ascending: false });
+
+    if (error) throw error;
+    return (data as FinancialRecord[]) || [];
+  } catch (e) {
+    console.error("Supabase Fetch Error:", e);
+    // Fallback to local storage if offline or error
+    const saved = localStorage.getItem('fincore_records');
+    return saved ? JSON.parse(saved) : [];
+  }
+};
+
+export const updateRecordInDatabase = async (id: string, updates: Partial<FinancialRecord>): Promise<ApiResponse<void>> => {
+  try {
+    const { error } = await supabase
+      .from('financial_records')
+      .update(updates)
+      .eq('id', id);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (e: any) {
+    console.error("Supabase Update Error:", e);
+    return { success: false, error: e.message };
+  }
 };

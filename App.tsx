@@ -1,6 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { processDocument, saveToExternalDatabase, fetchRecordsFromExternalDatabase, isApiKeyConfigured } from './services/geminiService';
+import { 
+  processDocument, 
+  saveToExternalDatabase, 
+  fetchRecordsFromExternalDatabase, 
+  isApiKeyConfigured,
+  updateRecordInDatabase
+} from './services/geminiService';
 import { FinancialRecord, ExtractedData, TransactionCategory, OperationState, BankMovement } from './types';
 import ClassificationForm from './components/ClassificationForm';
 import ManagementTable from './components/ManagementTable';
@@ -21,7 +27,6 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
   const [records, setRecords] = useState<FinancialRecord[]>([]);
-  const [bankMovements, setBankMovements] = useState<BankMovement[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [hasApiKey, setHasApiKey] = useState<boolean>(true);
 
@@ -29,47 +34,27 @@ const App: React.FC = () => {
     const keyOk = isApiKeyConfigured();
     setHasApiKey(keyOk);
 
-    const loadRecords = async () => {
+    const loadInitialData = async () => {
+      // First load from local storage for instant UI
       const saved = localStorage.getItem('fincore_records');
-      if (saved) {
-        setRecords(JSON.parse(saved));
-      } else {
-        const dummy: FinancialRecord[] = [
-          {
-            id: '1',
-            vendor: 'Google Cloud Services',
-            date: '2024-03-01',
-            amount: 150.50,
-            currency: 'USD',
-            taxId: 'US-999222',
-            invoiceNumber: 'GCS-2024-1',
-            categorySuggest: 'Hosting & Infrastructure',
-            category: TransactionCategory.EGRESO,
-            operationState: OperationState.CONCILIADO,
-            isPaid: true,
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '2',
-            vendor: 'Client Acme Corp',
-            date: '2024-03-05',
-            amount: 5000,
-            currency: 'USD',
-            taxId: 'AC-111000',
-            invoiceNumber: 'INV-001',
-            categorySuggest: 'Software Consulting',
-            category: TransactionCategory.INGRESO,
-            operationState: OperationState.PENDIENTE,
-            isPaid: false,
-            createdAt: new Date().toISOString()
-          }
-        ];
-        setRecords(dummy);
-        localStorage.setItem('fincore_records', JSON.stringify(dummy));
+      if (saved) setRecords(JSON.parse(saved));
+
+      // Then fetch from Supabase to sync
+      setIsSyncing(true);
+      try {
+        const remoteRecords = await fetchRecordsFromExternalDatabase();
+        if (remoteRecords.length > 0) {
+          setRecords(remoteRecords);
+          localStorage.setItem('fincore_records', JSON.stringify(remoteRecords));
+        }
+      } catch (error) {
+        console.warn("Could not sync with Supabase, using local data.");
+      } finally {
+        setIsSyncing(false);
       }
     };
     
-    loadRecords();
+    loadInitialData();
   }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -107,12 +92,12 @@ const App: React.FC = () => {
         const updated = [record, ...records];
         setRecords(updated);
         localStorage.setItem('fincore_records', JSON.stringify(updated));
-        setSuccessMessage("✅ Registro guardado y sincronizado exitosamente.");
+        setSuccessMessage("✅ Registro guardado en Supabase exitosamente.");
       } else {
-        alert("Error de sincronización con el servidor central.");
+        alert(`Error al guardar: ${result.error}`);
       }
     } catch (e) {
-      alert("Error de red al intentar sincronizar.");
+      alert("Error de red al intentar sincronizar con Supabase.");
     } finally {
       setIsSyncing(false);
       setExtractedData(null);
@@ -120,10 +105,18 @@ const App: React.FC = () => {
     }
   };
 
-  const updateRecord = (id: string, updates: Partial<FinancialRecord>) => {
+  const updateRecord = async (id: string, updates: Partial<FinancialRecord>) => {
+    // Optimistic UI update
     const updated = records.map(r => r.id === id ? { ...r, ...updates } : r);
     setRecords(updated);
     localStorage.setItem('fincore_records', JSON.stringify(updated));
+
+    // Remote update
+    try {
+      await updateRecordInDatabase(id, updates);
+    } catch (e) {
+      console.error("Failed to sync update to Supabase");
+    }
   };
 
   const reset = () => {
@@ -154,6 +147,14 @@ const App: React.FC = () => {
         </div>
       </header>
 
+      {/* Sync Status Bar */}
+      {isSyncing && (
+        <div className="bg-blue-600 text-white text-[8px] font-black uppercase tracking-[0.3em] py-1 flex items-center justify-center gap-2">
+          <div className="w-1.5 h-1.5 bg-white rounded-full animate-ping"></div>
+          Sincronizando con Supabase...
+        </div>
+      )}
+
       {/* Mobile Nav */}
       <nav className="md:hidden flex overflow-x-auto bg-slate-900 p-2 gap-2 border-t border-white/5 sticky top-16 z-40 no-scrollbar">
         <button onClick={() => setView(AppView.DASHBOARD)} className={`flex-shrink-0 px-4 py-2 rounded-xl text-[9px] font-black uppercase ${view === AppView.DASHBOARD ? 'bg-white text-slate-900' : 'text-slate-400'}`}>DASHBOARD</button>
@@ -172,7 +173,7 @@ const App: React.FC = () => {
 
         {view === AppView.UPLOAD && (
           <div className="max-w-4xl mx-auto">
-            {isProcessing || isSyncing ? (
+            {isProcessing ? (
               <div className="bg-white p-24 rounded-[60px] shadow-2xl text-center border border-slate-100 animate-fadeIn">
                 <div className="w-24 h-24 border-[12px] border-slate-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-10"></div>
                 <h2 className="text-3xl font-black uppercase tracking-tighter">Procesando Inteligencia...</h2>
@@ -243,11 +244,11 @@ const App: React.FC = () => {
             <h1 className="text-sm font-black tracking-tighter uppercase">FINCORE<span className="text-blue-400 text-[10px] ml-1">AI</span></h1>
           </div>
           <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">
-            Treasury & Audit Hub &copy; 2024 | Powered by Gemini 3.0
+            Treasury & Audit Hub &copy; 2024 | Connected to Supabase Cloud
           </div>
           <div className="flex gap-4 items-center">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="text-[8px] font-black uppercase text-slate-500">Live Services Active</span>
+            <span className="text-[8px] font-black uppercase text-slate-500">Database Live</span>
           </div>
         </div>
       </footer>
