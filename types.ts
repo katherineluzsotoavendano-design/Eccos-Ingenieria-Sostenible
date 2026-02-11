@@ -61,6 +61,7 @@ export interface FinancialRecord extends ExtractedData {
   operationState: OperationState;
   isPaid: boolean;
   createdAt: string;
+  driveUrl?: string; // Nuevo campo para el enlace de Drive
 }
 
 export interface BankMovement {

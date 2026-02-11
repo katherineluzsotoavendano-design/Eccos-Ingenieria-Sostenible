@@ -61,7 +61,7 @@ const ManagementTable: React.FC<Props> = ({ records, onUpdateRecord }) => {
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
                 <th className="px-8 py-6 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Emisión</th>
-                <th className="px-8 py-6 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Carpeta Drive</th>
+                <th className="px-8 py-6 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Documento</th>
                 <th className="px-8 py-6 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Entidad / Factura</th>
                 <th className="px-8 py-6 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Monto</th>
                 <th className="px-8 py-6 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Estado</th>
@@ -72,9 +72,20 @@ const ManagementTable: React.FC<Props> = ({ records, onUpdateRecord }) => {
                 <tr key={record.id} className="hover:bg-slate-50/30 transition-colors">
                   <td className="px-8 py-6 font-bold text-slate-800 text-sm">{record.date}</td>
                   <td className="px-8 py-6">
-                    <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-blue-100">
-                      📂 {getMonthName(record.date)}
-                    </span>
+                    {record.driveUrl ? (
+                      <a 
+                        href={record.driveUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="px-3 py-1 bg-blue-500 text-white rounded-lg text-[10px] font-black uppercase tracking-widest border border-blue-600 hover:bg-blue-700 transition-all shadow-sm block text-center"
+                      >
+                        Ver Documento 📄
+                      </a>
+                    ) : (
+                      <span className="px-3 py-1 bg-slate-100 text-slate-400 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-200 block text-center">
+                        📂 {getMonthName(record.date)}
+                      </span>
+                    )}
                   </td>
                   <td className="px-8 py-6">
                     <div className="flex flex-col">

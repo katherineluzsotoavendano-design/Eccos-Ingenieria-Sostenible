@@ -24,7 +24,6 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   
-  // Login/Register States
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPass, setLoginPass] = useState('');
   const [regName, setRegName] = useState('');
@@ -114,11 +113,16 @@ const App: React.FC = () => {
     setIsSyncing(true);
     
     try {
-      // 1. Guardar en Base de Datos Principal (Supabase)
-      await saveToExternalDatabase(record);
-      
-      // 2. Sincronizar con Google Sheets y Drive
+      // 1. Sincronizar con Google Sheets y Drive PRIMERO para obtener la URL
       const cloudRes = await saveToGoogleSheets(record, currentFileBase64 || undefined, currentFileMime || undefined);
+      
+      const recordWithUrl = {
+        ...record,
+        driveUrl: cloudRes.success ? cloudRes.data?.driveUrl : undefined
+      };
+
+      // 2. Guardar en Base de Datos Principal (Supabase) incluyendo la URL si existe
+      await saveToExternalDatabase(recordWithUrl);
       
       if (cloudRes.success) {
         setSuccessMessage("✅ Registro completado y archivo guardado en Google Drive.");
@@ -126,7 +130,7 @@ const App: React.FC = () => {
         setSuccessMessage("✅ Registro local guardado. (Sincronización Cloud pendiente)");
       }
       
-      setRecords([record, ...records]);
+      setRecords([recordWithUrl, ...records]);
     } catch (err) {
       console.error(err);
       alert("Hubo un problema al guardar el registro.");
