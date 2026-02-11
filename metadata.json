@@ -1,0 +1,7 @@
+{
+  "name": "FINCORE AI - Treasury Intelligence",
+  "description": "An advanced financial management and conciliation platform powered by Gemini AI for automated data extraction and audit workflows.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
