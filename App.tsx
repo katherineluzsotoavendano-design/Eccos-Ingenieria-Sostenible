@@ -16,12 +16,13 @@ import ConciliationModule from './components/ConciliationModule';
 enum AppView {
   UPLOAD = 'UPLOAD',
   TABLE = 'TABLE',
-  DASHBOARD = 'DASHBOARD',
-  BANCOS = 'BANCOS'
+  BANCOS = 'BANCOS',
+  DASHBOARD = 'DASHBOARD'
 }
 
 const App: React.FC = () => {
-  const [view, setView] = useState<AppView>(AppView.DASHBOARD);
+  // Cambiamos la vista inicial a UPLOAD ya que Dashboard ahora es la última sección
+  const [view, setView] = useState<AppView>(AppView.UPLOAD);
   const [preCategory, setPreCategory] = useState<TransactionCategory | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -71,7 +72,6 @@ const App: React.FC = () => {
     reader.onload = async () => {
       try {
         const base64 = (reader.result as string).split(',')[1];
-        // Pasamos preCategory para que la IA sepa qué datos extraer (Emisor vs Destinatario)
         const result = await processDocument(base64, file.type, preCategory);
         setExtractedData(result);
       } catch (error: any) {
@@ -126,7 +126,7 @@ const App: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-slate-50 font-sans text-slate-900 selection:bg-blue-100">
       <header className="bg-slate-900 text-white p-4 sticky top-0 z-50 shadow-xl border-b border-white/5">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-4 cursor-pointer" onClick={() => setView(AppView.DASHBOARD)}>
+          <div className="flex items-center gap-4 cursor-pointer" onClick={() => setView(AppView.UPLOAD)}>
             <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center font-black italic shadow-lg shadow-blue-500/30">F</div>
             <div className="flex flex-col">
               <h1 className="text-xl font-black tracking-tighter leading-none">FINCORE<span className="text-blue-400 text-xs ml-1 font-bold">AI</span></h1>
@@ -134,10 +134,10 @@ const App: React.FC = () => {
             </div>
           </div>
           <nav className="hidden md:flex gap-1 bg-slate-800/50 p-1 rounded-2xl">
-            <button onClick={() => setView(AppView.DASHBOARD)} className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.DASHBOARD ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-400 hover:text-white'}`}>DASHBOARD</button>
             <button onClick={() => setView(AppView.UPLOAD)} className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.UPLOAD ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-400 hover:text-white'}`}>EXTRAER</button>
             <button onClick={() => setView(AppView.TABLE)} className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.TABLE ? 'bg-slate-700 text-white shadow-xl' : 'text-slate-400 hover:text-white'}`}>AUDITORÍA</button>
             <button onClick={() => setView(AppView.BANCOS)} className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.BANCOS ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-400 hover:text-white'}`}>BANCOS</button>
+            <button onClick={() => setView(AppView.DASHBOARD)} className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.DASHBOARD ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-400 hover:text-white'}`}>DASHBOARD</button>
           </nav>
         </div>
       </header>
@@ -203,15 +203,17 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {view === AppView.TABLE && (
+          <ManagementTable records={records} onUpdateRecord={updateRecord} />
+        )}
+        
         {view === AppView.BANCOS && (
           <ConciliationModule 
             records={records} 
             onConciliate={(id) => updateRecord(id, { operationState: OperationState.CONCILIADO, isPaid: true })} 
           />
         )}
-        {view === AppView.TABLE && (
-          <ManagementTable records={records} onUpdateRecord={updateRecord} />
-        )}
+
         {view === AppView.DASHBOARD && (
           <Dashboard records={records} />
         )}
