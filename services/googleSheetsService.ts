@@ -1,29 +1,58 @@
 
-import { FinancialRecord, ApiResponse } from "../types";
-
-// URL de Google Apps Script actualizada por el usuario
-const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwWliz4m2fyvwlq8aAnE_zuzWwYvszlWj9fetbLtSGVfxR7mmJDx0vk1PcK2g5rSFNTbg/exec';
+import { FinancialRecord, ApiResponse, User } from "../types";
 
 /**
- * Envía un registro financiero a Google Sheets a través de un Webhook de Apps Script.
- * Utiliza el modo 'no-cors' con Content-Type 'text/plain' para evitar bloqueos de navegador
- * y asegurar que los datos lleguen al script de Google.
+ * URL de la Aplicación Web de Google Apps Script (Versión de Producción Actualizada).
  */
-export const saveToGoogleSheets = async (record: FinancialRecord): Promise<ApiResponse<void>> => {
+const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzmSMnvBG891G6qo-uzIJvuh5KaVdjDjI97l60xYfwdI43QvDU7g1zsFrW7EG_E-vclXA/exec';
+
+/**
+ * Autentica al usuario contra la base de datos de Google Sheets.
+ */
+export const loginUser = async (email: string, password: string): Promise<ApiResponse<User>> => {
   try {
-    // Enviamos la petición POST. En modo no-cors, el navegador no permite leer la respuesta,
-    // pero garantiza que el cuerpo (body) se envíe al servidor de Google.
+    const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify({ action: 'login', email, password }),
+    });
+    
+    const result = await response.json();
+    return result.success ? { success: true, data: result.user } : { success: false, error: result.error };
+  } catch (e: any) {
+    console.error("Login Error:", e);
+    return { success: false, error: "Error de conexión con el servidor de autenticación." };
+  }
+};
+
+/**
+ * Envía el registro y el archivo original a Google Sheets/Drive.
+ * Se utiliza 'no-cors' para evitar bloqueos por redirecciones de Google Apps Script.
+ */
+export const saveToGoogleSheets = async (
+  record: FinancialRecord, 
+  fileBase64?: string, 
+  fileMimeType?: string
+): Promise<ApiResponse<void>> => {
+  try {
+    // Usamos mode: 'no-cors' para el envío de datos pesados (archivos)
+    // Esto permite que la petición llegue a Apps Script sin fallar por políticas de CORS del navegador
     await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
       method: 'POST',
       mode: 'no-cors', 
-      headers: {
-        'Content-Type': 'text/plain',
+      headers: { 
+        'Content-Type': 'text/plain' 
       },
-      body: JSON.stringify(record),
+      body: JSON.stringify({ 
+        action: 'save', 
+        ...record,
+        fileBase64, 
+        fileMimeType
+      }),
     });
-
-    // En 'no-cors' la respuesta es opaca (type: "opaque"), por lo que devolvemos éxito manual
-    // si la ejecución del fetch no lanzó una excepción de red.
+    
     return { success: true };
   } catch (e: any) {
     console.error("Google Sheets Sync Error:", e);

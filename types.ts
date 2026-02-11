@@ -21,6 +21,14 @@ export enum FlowType {
   CFF = 'CFF'
 }
 
+export type UserRole = 'ADMIN' | 'OPERATOR' | 'VIEWER';
+
+export interface User {
+  email: string;
+  name: string;
+  role: UserRole;
+}
+
 export type IncomeType = 'VENTAS' | 'PRÉSTAMOS' | 'CAMBIO DE MONEDA' | 'INGRESOS FINANCIEROS';
 export type ServiceLine = 'Capacitaciones Ágiles/Presenciales' | 'Consultoría Ambiental' | 'Consultoría SIG' | 'Auditoría Tradicional' | 'Auditorías 360' | 'ECCOS GASTO';
 export type CostType = 'FIJO' | 'VARIABLE';
@@ -44,7 +52,7 @@ export interface ExtractedData {
   responsible?: Responsible;
   voucherAmount?: number;
   voucherDate?: string;
-  paidDate?: string; // Fecha en la que realmente ingresó/salió el dinero
+  paidDate?: string;
 }
 
 export interface FinancialRecord extends ExtractedData {
