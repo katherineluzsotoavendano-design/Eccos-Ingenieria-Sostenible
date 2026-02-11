@@ -4,11 +4,10 @@ import {
   processDocument, 
   saveToExternalDatabase, 
   fetchRecordsFromExternalDatabase, 
-  isApiKeyConfigured,
   updateRecordInDatabase
 } from './services/geminiService';
-import { saveToGoogleSheets, loginUser } from './services/googleSheetsService';
-import { FinancialRecord, ExtractedData, TransactionCategory, OperationState, User } from './types';
+import { saveToGoogleSheets, loginUser, registerUser } from './services/googleSheetsService';
+import { FinancialRecord, ExtractedData, TransactionCategory, OperationState, User, UserRole } from './types';
 import ClassificationForm from './components/ClassificationForm';
 import ManagementTable from './components/ManagementTable';
 import Dashboard from './components/Dashboard';
@@ -23,10 +22,19 @@ enum AppView {
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [isRegisterMode, setIsRegisterMode] = useState(false);
+  
+  // Login States
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPass, setLoginPass] = useState('');
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
   
+  // Register States
+  const [regName, setRegName] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPass, setRegPass] = useState('');
+  const [regRole, setRegRole] = useState<UserRole>('OPERATOR');
+
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [view, setView] = useState<AppView>(AppView.UPLOAD);
   const [preCategory, setPreCategory] = useState<TransactionCategory | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -65,7 +73,21 @@ const App: React.FC = () => {
       setUser(res.data);
       localStorage.setItem('fincore_session', JSON.stringify(res.data));
     } else {
-      alert(res.error || "Error de acceso");
+      alert(res.error || "Credenciales incorrectas. Verifica tu email y contraseña.");
+    }
+    setIsLoggingIn(false);
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoggingIn(true);
+    const res = await registerUser(regName, regEmail, regPass, regRole);
+    if (res.success) {
+      alert("¡Usuario registrado con éxito! Ahora puedes iniciar sesión.");
+      setIsRegisterMode(false);
+      setLoginEmail(regEmail);
+    } else {
+      alert(res.error || "Error al registrar usuario.");
     }
     setIsLoggingIn(false);
   };
@@ -100,10 +122,8 @@ const App: React.FC = () => {
     setIsSyncing(true);
     const month = getMonthName(record.date);
     
-    // 1. Guardar en Supabase
     await saveToExternalDatabase(record);
     
-    // 2. Sincronizar con Google (Organización por Mes en Drive)
     saveToGoogleSheets(record, currentFileBase64 || undefined, currentFileMime || undefined)
       .then(() => {
         setRecords([record, ...records]);
@@ -125,25 +145,60 @@ const App: React.FC = () => {
   if (!user) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl p-12 animate-fadeIn">
-          <div className="flex justify-center mb-10">
-            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black italic text-2xl shadow-xl shadow-blue-500/30">F</div>
+        <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl p-10 animate-fadeIn">
+          <div className="flex justify-center mb-8">
+            <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black italic text-2xl shadow-xl shadow-blue-500/30">F</div>
           </div>
-          <h2 className="text-3xl font-black text-center tracking-tighter uppercase mb-2">Acceso Central</h2>
-          <p className="text-slate-400 text-center font-bold text-[10px] uppercase tracking-widest mb-10">Fincore AI - Treasury Intelligence</p>
-          <form onSubmit={handleLogin} className="space-y-6">
+          
+          <h2 className="text-2xl font-black text-center tracking-tighter uppercase mb-1">
+            {isRegisterMode ? 'Crear Cuenta' : 'Acceso Central'}
+          </h2>
+          <p className="text-slate-400 text-center font-bold text-[9px] uppercase tracking-widest mb-8">
+            Fincore AI - Treasury Intelligence
+          </p>
+
+          <form onSubmit={isRegisterMode ? handleRegister : handleLogin} className="space-y-4">
+            {isRegisterMode && (
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Nombre Completo</label>
+                <input type="text" required value={regName} onChange={e => setRegName(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 font-bold text-sm outline-none transition-all" placeholder="Juan Pérez" />
+              </div>
+            )}
+            
             <div className="space-y-1">
               <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Email Corporativo</label>
-              <input type="email" required value={loginEmail} onChange={e => setLoginEmail(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-6 py-4 font-bold outline-none transition-all" placeholder="usuario@fincore.com" />
+              <input type="email" required value={isRegisterMode ? regEmail : loginEmail} onChange={e => isRegisterMode ? setRegEmail(e.target.value) : setLoginEmail(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 font-bold text-sm outline-none transition-all" placeholder="usuario@fincore.com" />
             </div>
+
             <div className="space-y-1">
               <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Contraseña</label>
-              <input type="password" required value={loginPass} onChange={e => setLoginPass(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-6 py-4 font-bold outline-none transition-all" placeholder="••••••••" />
+              <input type="password" required value={isRegisterMode ? regPass : loginPass} onChange={e => isRegisterMode ? setRegPass(e.target.value) : setLoginPass(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 font-bold text-sm outline-none transition-all" placeholder="••••••••" />
             </div>
-            <button disabled={isLoggingIn} type="submit" className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase tracking-widest text-xs hover:bg-blue-600 transition-all shadow-xl disabled:opacity-50">
-              {isLoggingIn ? 'Verificando...' : 'Iniciar Sesión'}
+
+            {isRegisterMode && (
+              <div className="space-y-1">
+                <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Rol en Sistema</label>
+                <select value={regRole} onChange={e => setRegRole(e.target.value as UserRole)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 font-bold text-xs outline-none transition-all">
+                  <option value="OPERATOR">OPERADOR</option>
+                  <option value="ADMIN">ADMINISTRADOR</option>
+                  <option value="VIEWER">SOLO LECTURA</option>
+                </select>
+              </div>
+            )}
+
+            <button disabled={isLoggingIn} type="submit" className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 transition-all shadow-xl disabled:opacity-50 mt-4">
+              {isLoggingIn ? 'Procesando...' : (isRegisterMode ? 'Registrar Usuario' : 'Iniciar Sesión')}
             </button>
           </form>
+
+          <div className="mt-8 pt-6 border-t border-slate-100 text-center">
+            <button 
+              onClick={() => setIsRegisterMode(!isRegisterMode)} 
+              className="text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-700"
+            >
+              {isRegisterMode ? '¿Ya tienes cuenta? Ingresa aquí' : '¿No tienes cuenta? Regístrate'}
+            </button>
+          </div>
         </div>
       </div>
     );
