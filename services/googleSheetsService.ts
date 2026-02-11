@@ -1,9 +1,10 @@
+
 import { FinancialRecord, ApiResponse, User, UserRole } from "../types";
 
 /**
- * URL de la Aplicación Web de Google Apps Script (Versión Actualizada proporcionada por el usuario).
+ * URL de la Aplicación Web de Google Apps Script (Versión Actualizada).
  */
-const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbxlKEXnq02kZK0_yQkL8gN6UNIGJXYlR2DdNw0rqOmIY8rcUPpJrKCENaXKXvRdYSfflQ/exec';
+const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbz4BhF6109Vn9MPt4cZ-nxhP0JTmApFyitsnyocehlZ4Laljyduqun077-uJX2rkcgGYQ/exec';
 
 /**
  * Autentica al usuario contra la base de datos de Google Sheets.
@@ -25,11 +26,13 @@ export const loginUser = async (email: string, password: string): Promise<ApiRes
       }
       return { success: false, error: result.error || "Credenciales incorrectas." };
     } catch (e) {
-      console.error("Respuesta cruda del servidor:", text);
-      return { success: false, error: "Respuesta inválida del servidor de Google." };
+      if (text.includes("No tienes permiso") || text.includes("Exception")) {
+        return { success: false, error: "Error de permisos en Google Script. Asegúrate de haber autorizado el acceso a Drive y Sheets." };
+      }
+      return { success: false, error: "Respuesta inesperada del servidor de Google." };
     }
   } catch (e: any) {
-    return { success: false, error: "Error de red: No se pudo conectar con Google Sheets." };
+    return { success: false, error: "Error de red: No se pudo conectar con el servicio de autenticación." };
   }
 };
 
@@ -50,10 +53,10 @@ export const registerUser = async (name: string, email: string, password: string
       const result = JSON.parse(text);
       return result.success ? { success: true } : { success: false, error: result.error };
     } catch (e) {
-      return { success: false, error: "Error al registrar: respuesta fallida del servidor." };
+      return { success: false, error: "Error de servidor al intentar registrar el usuario." };
     }
   } catch (e: any) {
-    return { success: false, error: "Fallo de conexión al intentar registrar." };
+    return { success: false, error: "Fallo de conexión al intentar el registro." };
   }
 };
 
@@ -90,8 +93,9 @@ export const saveToGoogleSheets = async (
 
     const text = await response.text();
     
-    if (text.startsWith('<!DOCTYPE html>')) {
-        throw new Error("Configuración incorrecta del Apps Script (devolvió HTML).");
+    // Verificación de errores de permisos comunes en el despliegue
+    if (text.includes("DriveApp") || text.includes("permission") || text.includes("Exception")) {
+      return { success: false, error: "El script de Google no tiene permisos suficientes para gestionar archivos en Drive. Por favor, revisa la autorización en Apps Script." };
     }
 
     const result = JSON.parse(text);
@@ -100,6 +104,6 @@ export const saveToGoogleSheets = async (
       : { success: false, error: result.error };
   } catch (e: any) {
     console.error("Google Sheets Sync Error:", e);
-    return { success: false, error: e.message };
+    return { success: false, error: "Error de sincronización: " + e.message };
   }
 };

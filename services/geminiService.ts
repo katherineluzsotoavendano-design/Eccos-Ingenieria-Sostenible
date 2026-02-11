@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { ExtractedData, FinancialRecord, ApiResponse, TransactionCategory } from "../types";
 import { supabase } from "./supabaseClient";
@@ -97,14 +98,14 @@ export const saveToExternalDatabase = async (record: FinancialRecord): Promise<A
     if (error) throw error;
     return { success: true };
   } catch (e: any) {
-    console.error("Supabase Save Error:", e.message);
-    // No bloqueamos el proceso si Supabase falla (Sheets es el primario)
-    return { success: false, error: "Error de sincronización con Supabase: " + e.message };
+    console.warn("Supabase Sync skipped (Supabase error):", e.message);
+    return { success: false, error: e.message };
   }
 };
 
 export const fetchRecordsFromExternalDatabase = async (): Promise<FinancialRecord[]> => {
   try {
+    // Intentamos traer datos con un timeout implícito
     const { data, error } = await supabase
       .from('financial_records')
       .select('*')
@@ -113,8 +114,8 @@ export const fetchRecordsFromExternalDatabase = async (): Promise<FinancialRecor
     if (error) throw error;
     return (data as FinancialRecord[]) || [];
   } catch (e: any) {
-    console.error("Supabase Fetch Error (Failed to fetch):", e.message);
-    // Si falla la conexión (ej. bloqueos de red), retornamos lista vacía para que la app no se rompa
+    console.error("Error al obtener registros de Supabase (Failed to fetch):", e.message);
+    // IMPORTANTE: Retornamos lista vacía en lugar de lanzar error para que la App cargue
     return [];
   }
 };
