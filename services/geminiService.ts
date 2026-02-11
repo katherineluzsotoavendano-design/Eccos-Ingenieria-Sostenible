@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { ExtractedData, FinancialRecord, ApiResponse, TransactionCategory } from "../types";
 import { supabase } from "./supabaseClient";
@@ -95,30 +94,27 @@ export const processVoucher = async (base64: string, mimeType: string): Promise<
 export const saveToExternalDatabase = async (record: FinancialRecord): Promise<ApiResponse<void>> => {
   try {
     const { error } = await supabase.from('financial_records').insert([record]);
-    if (error) {
-      console.error("Supabase Error Details:", error);
-      if (error.message.includes('column') || error.message.includes('schema cache') || error.code === '42703') {
-        throw new Error("⚠️ ERROR DE ESQUEMA: Debes ejecutar el script SQL de actualización en el dashboard de Supabase.");
-      }
-      throw error;
-    }
+    if (error) throw error;
     return { success: true };
   } catch (e: any) {
-    console.error("Critical Database Error:", e);
-    return { success: false, error: e.message };
+    console.error("Supabase Save Error:", e.message);
+    // No bloqueamos el proceso si Supabase falla (Sheets es el primario)
+    return { success: false, error: "Error de sincronización con Supabase: " + e.message };
   }
 };
 
 export const fetchRecordsFromExternalDatabase = async (): Promise<FinancialRecord[]> => {
   try {
-    const { data, error } = await supabase.from('financial_records').select('*').order('createdAt', { ascending: false });
-    if (error) {
-       console.error("Error fetching records:", error);
-       return [];
-    }
+    const { data, error } = await supabase
+      .from('financial_records')
+      .select('*')
+      .order('createdAt', { ascending: false });
+      
+    if (error) throw error;
     return (data as FinancialRecord[]) || [];
-  } catch (e) {
-    console.error("Fetch Exception:", e);
+  } catch (e: any) {
+    console.error("Supabase Fetch Error (Failed to fetch):", e.message);
+    // Si falla la conexión (ej. bloqueos de red), retornamos lista vacía para que la app no se rompa
     return [];
   }
 };
@@ -126,8 +122,8 @@ export const fetchRecordsFromExternalDatabase = async (): Promise<FinancialRecor
 export const updateRecordInDatabase = async (id: string, updates: Partial<FinancialRecord>): Promise<ApiResponse<void>> => {
   try {
     const { error } = await supabase.from('financial_records').update(updates).eq('id', id);
-    if (error) console.error("Update Error:", error);
-    return { success: !error, error: error?.message };
+    if (error) throw error;
+    return { success: true };
   } catch (e: any) {
     return { success: false, error: e.message };
   }
