@@ -2,17 +2,16 @@
 import { FinancialRecord, ApiResponse, User, UserRole } from "../types";
 
 /**
- * URL de la Aplicación Web de Google Apps Script actualizada por Katherine.
- * Esta versión incluye las correcciones para los controles de validación por correo.
+ * URL de la Aplicación Web de Google Apps Script v3.0 (Organización por mes y correos).
  */
-const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbxMzUi7sEMgW7RabyBXToXlI6Z_TAuZkHvXv4CtTMiarysBZJ-hVtI8vrD9OSj6HlRONw/exec';
+const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwrTqF4gSiCZF3M3nxP0ZMeAYimtjy1ipIc5LY-eM3Fo2epmk9WCW003hcsWg0PtrTY9Q/exec';
 
 const handleGasResponse = (text: string) => {
   // Captura errores de permisos o sesiones de Google que vienen como HTML
   if (text.includes("Session.getActiveUser") || text.includes("permission") || text.includes("<!DOCTYPE html>") || text.includes("Google Drive - Quota exceeded")) {
     return { 
       success: false, 
-      error: "⚠️ ERROR DE SERVIDOR: El script de Google no tiene permisos o ha excedido la cuota de correos. Por favor, verifica la autorización en Google Apps Script." 
+      error: "⚠️ ERROR DE SERVIDOR: El script de Google no tiene permisos o ha excedido su cuota. Por favor, revisa la autorización en Apps Script." 
     };
   }
 
@@ -21,7 +20,6 @@ const handleGasResponse = (text: string) => {
     return json;
   } catch (e) {
     console.error("Respuesta no válida de GAS:", text);
-    // Si la respuesta no es JSON, a veces es un mensaje directo de error del script
     if (text.length > 0 && text.length < 200) {
        return { success: false, error: text };
     }
@@ -51,22 +49,17 @@ export const saveToGoogleSheets = async (
   fileMimeType?: string
 ): Promise<ApiResponse<{ driveUrl?: string }>> => {
   try {
-    const cleanData = { ...record };
-    if (record.category === 'EGRESO') {
-      delete (cleanData as any).creditDate;
-      delete (cleanData as any).incomeType;
-      delete (cleanData as any).paymentMode;
-    }
+    const payload = { 
+      ...record, 
+      action: 'save', 
+      fileBase64, 
+      fileMimeType 
+    };
 
     const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ 
-        ...cleanData, 
-        action: 'save', 
-        fileBase64, 
-        fileMimeType 
-      }),
+      body: JSON.stringify(payload),
     });
 
     const text = await response.text();
@@ -76,7 +69,7 @@ export const saveToGoogleSheets = async (
       ? { success: true, data: { driveUrl: result.driveUrl } } 
       : { success: false, error: result.error };
   } catch (e: any) {
-    return { success: false, error: "Error de sincronización con la hoja de cálculo." };
+    return { success: false, error: "Error de sincronización con la hoja de cálculo y Drive." };
   }
 };
 

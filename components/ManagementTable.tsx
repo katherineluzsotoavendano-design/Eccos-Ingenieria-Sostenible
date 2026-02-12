@@ -9,19 +9,19 @@ interface Props {
 
 const ManagementTable: React.FC<Props> = ({ records, onUpdateRecord }) => {
   const [filter, setFilter] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
-
+  
   const getMonthName = (dateStr: string) => {
     const months = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
-    const monthIndex = parseInt(dateStr.split('-')[1]) - 1;
+    const parts = dateStr.split('-');
+    if (parts.length < 2) return "OTROS";
+    const monthIndex = parseInt(parts[1]) - 1;
     return months[monthIndex] || "OTROS";
   };
 
   const filtered = records.filter(r => {
     const matchesText = r.vendor.toLowerCase().includes(filter.toLowerCase()) || 
                        r.invoiceNumber.toLowerCase().includes(filter.toLowerCase());
-    const matchesCategory = categoryFilter === 'ALL' ? true : r.category === categoryFilter;
-    return matchesText && matchesCategory;
+    return matchesText;
   });
 
   const handleTogglePaid = (record: FinancialRecord) => {
@@ -38,24 +38,25 @@ const ManagementTable: React.FC<Props> = ({ records, onUpdateRecord }) => {
   };
 
   return (
-    <div className="space-y-8 animate-fadeIn">
-      <div className="flex flex-col md:flex-row justify-between items-end md:items-center gap-4">
+    <div className="space-y-6 sm:space-y-8 animate-fadeIn">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-4xl font-black tracking-tighter uppercase text-slate-900 leading-none">Auditoría Digital</h2>
-          <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-2">Documentos organizados por periodo mensual</p>
+          <h2 className="text-2xl sm:text-4xl font-black tracking-tighter uppercase text-slate-900 leading-none">Auditoría Digital</h2>
+          <p className="text-slate-400 font-bold text-[10px] sm:text-xs uppercase tracking-widest mt-2">Documentos organizados</p>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
+        <div className="w-full md:w-auto">
           <input 
             type="text" 
-            placeholder="Buscar..."
+            placeholder="Buscar entidad o factura..."
             value={filter}
             onChange={e => setFilter(e.target.value)}
-            className="flex-grow md:w-64 bg-white border-2 border-slate-100 focus:border-blue-500 rounded-2xl px-6 py-3 outline-none font-bold text-xs shadow-sm"
+            className="w-full md:w-64 bg-white border-2 border-slate-100 focus:border-blue-500 rounded-2xl px-6 py-3 outline-none font-bold text-xs shadow-sm"
           />
         </div>
       </div>
 
-      <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 overflow-hidden">
+      {/* Desktop Table */}
+      <div className="hidden md:block bg-white rounded-[40px] shadow-sm border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -79,7 +80,7 @@ const ManagementTable: React.FC<Props> = ({ records, onUpdateRecord }) => {
                         rel="noopener noreferrer"
                         className="px-3 py-1 bg-blue-500 text-white rounded-lg text-[10px] font-black uppercase tracking-widest border border-blue-600 hover:bg-blue-700 transition-all shadow-sm block text-center"
                       >
-                        Ver Documento 📄
+                        Ver PDF 📄
                       </a>
                     ) : (
                       <span className="px-3 py-1 bg-slate-100 text-slate-400 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-200 block text-center">
@@ -109,6 +110,46 @@ const ManagementTable: React.FC<Props> = ({ records, onUpdateRecord }) => {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile Cards View */}
+      <div className="md:hidden grid grid-cols-1 gap-4 pb-10">
+        {filtered.map(record => (
+          <div key={record.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col gap-4">
+            <div className="flex justify-between items-start">
+              <div className="flex flex-col">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{record.date}</span>
+                <span className="text-sm font-black text-slate-900 uppercase leading-tight mt-1">{record.vendor}</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{record.invoiceNumber}</span>
+              </div>
+              <div className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase ${record.category === TransactionCategory.INGRESO ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                {record.category}
+              </div>
+            </div>
+            
+            <div className="flex justify-between items-end border-t border-slate-50 pt-4">
+              <div className="flex flex-col">
+                <span className="text-[8px] font-black text-slate-400 uppercase">Monto Total</span>
+                <span className="text-xl font-black text-slate-900">
+                  {record.amount.toLocaleString()} <span className="text-xs font-bold opacity-30">{record.currency}</span>
+                </span>
+              </div>
+              <div className="flex gap-2">
+                {record.driveUrl && (
+                  <a href={record.driveUrl} target="_blank" rel="noopener noreferrer" className="p-3 bg-slate-100 text-slate-600 rounded-xl">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                  </a>
+                )}
+                <button 
+                  onClick={() => handleTogglePaid(record)}
+                  className={`px-5 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest ${record.isPaid ? 'bg-green-100 text-green-600' : 'bg-slate-900 text-white'}`}
+                >
+                  {record.isPaid ? 'Listo' : 'Conciliar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
