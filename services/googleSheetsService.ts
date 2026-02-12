@@ -1,15 +1,41 @@
-
 import { FinancialRecord, ApiResponse, User, UserRole } from "../types";
 
 /**
- * URL de la Aplicación Web de Google Apps Script actualizada por Katherine.
+ * URL de la Aplicación Web de Google Apps Script. 
+ * IMPORTANTE: Cada vez que hagas cambios en el script y quieras que se apliquen, 
+ * debes ir a Implementar -> Nueva Implementación en Google Apps Script.
  */
-const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbyGzYGBk6MK1EZfZrN88jTM0vh5bETHvMFlGThxeMTFLrw16uXOhknsCvegENXKEXK71g/exec';
+const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwmjmvdRbyuZgTIDyQxPjZL5zBprFB08bEYn6FToEXIjV35ph7FdC0LnJ4d2uMOpLVdHQ/exec';
 
 /**
- * Autentica al usuario contra la base de datos de Google Sheets.
- * El backend de GAS ahora verifica el estado "AUTORIZADO".
+ * Helper para procesar la respuesta de Google Apps Script.
+ * Google a veces devuelve errores de permisos en texto plano en lugar de JSON.
  */
+const handleGasResponse = (text: string) => {
+  // Caso de error de permisos de correo
+  if (text.includes("MailApp.sendEmail") || text.includes("script.send_mail")) {
+    return { 
+      success: false, 
+      error: "⚠️ PERMISOS REQUERIDOS: Katherine debe entrar al editor de Google Apps Script, ejecutar la función 'autorizarManual' y luego realizar una 'Nueva Implementación'." 
+    };
+  }
+  
+  // Caso de error genérico de Drive/Sheets
+  if (text.includes("Exception") || text.includes("permission") || text.includes("DriveApp")) {
+    return { success: false, error: "Error de permisos en Google Script. Asegúrate de que el script tenga acceso a Drive y Sheets." };
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    // Si no es JSON, es probable que sea un mensaje de éxito/error de doGet o una página de error de Google
+    if (text.length > 0 && text.length < 200) {
+      return { success: true, message: text };
+    }
+    return { success: false, error: "Respuesta inesperada del servidor de Google." };
+  }
+};
+
 export const loginUser = async (email: string, password: string): Promise<ApiResponse<User>> => {
   try {
     const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
@@ -19,26 +45,17 @@ export const loginUser = async (email: string, password: string): Promise<ApiRes
     });
     
     const text = await response.text();
-    try {
-      const result = JSON.parse(text);
-      if (result.success && result.user) {
-        return { success: true, data: result.user };
-      }
-      return { success: false, error: result.error || "Credenciales incorrectas o acceso no autorizado." };
-    } catch (e) {
-      if (text.includes("No tienes permiso") || text.includes("Exception")) {
-        return { success: false, error: "Error de permisos en Google Script. Asegúrate de haber autorizado el acceso a Drive y Sheets." };
-      }
-      return { success: false, error: "Respuesta inesperada del servidor de Google." };
+    const result = handleGasResponse(text);
+    
+    if (result.success && result.user) {
+      return { success: true, data: result.user };
     }
+    return { success: false, error: result.error || "Credenciales incorrectas o cuenta no autorizada." };
   } catch (e: any) {
-    return { success: false, error: "Error de red: No se pudo conectar con el servicio de autenticación." };
+    return { success: false, error: "Error de red: No se pudo conectar con el servidor central." };
   }
 };
 
-/**
- * Registra un nuevo usuario en la hoja "USUARIOS" y activa el envío de correo a Katherine.
- */
 export const registerUser = async (name: string, email: string, password: string, role: UserRole): Promise<ApiResponse<void>> => {
   try {
     const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
@@ -48,20 +65,15 @@ export const registerUser = async (name: string, email: string, password: string
     });
     
     const text = await response.text();
-    try {
-      const result = JSON.parse(text);
-      return result.success ? { success: true } : { success: false, error: result.error };
-    } catch (e) {
-      return { success: false, error: "Error de servidor al intentar registrar el usuario." };
-    }
+    const result = handleGasResponse(text);
+    
+    if (result.success) return { success: true };
+    return { success: false, error: result.error };
   } catch (e: any) {
     return { success: false, error: "Fallo de conexión al intentar el registro." };
   }
 };
 
-/**
- * Envía el registro y el archivo original a Google Sheets/Drive.
- */
 export const saveToGoogleSheets = async (
   record: FinancialRecord, 
   fileBase64?: string, 
@@ -91,22 +103,12 @@ export const saveToGoogleSheets = async (
     });
 
     const text = await response.text();
+    const result = handleGasResponse(text);
     
-    if (text.includes("DriveApp") || text.includes("permission") || text.includes("Exception")) {
-      return { success: false, error: "El script de Google no tiene permisos suficientes para gestionar archivos en Drive." };
-    }
-
-    try {
-      const result = JSON.parse(text);
-      return result.success 
-        ? { success: true, data: { driveUrl: result.driveUrl } } 
-        : { success: false, error: result.error };
-    } catch (parseError) {
-      console.error("Error parsing GAS response:", text);
-      return { success: false, error: "Respuesta inválida del servidor de Google." };
-    }
+    return result.success 
+      ? { success: true, data: { driveUrl: result.driveUrl } } 
+      : { success: false, error: result.error };
   } catch (e: any) {
-    console.error("Google Sheets Sync Error:", e);
-    return { success: false, error: "Error de sincronización: " + e.message };
+    return { success: false, error: "Error de sincronización cloud: " + e.message };
   }
 };
