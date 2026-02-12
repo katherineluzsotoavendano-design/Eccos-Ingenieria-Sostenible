@@ -65,7 +65,7 @@ const App: React.FC = () => {
       setUser(res.data);
       localStorage.setItem('fincore_session', JSON.stringify(res.data));
     } else {
-      alert(res.error || "Credenciales incorrectas.");
+      alert(res.error || "Credenciales incorrectas o acceso no autorizado.");
     }
     setIsLoggingIn(false);
   };
@@ -165,9 +165,9 @@ const App: React.FC = () => {
               </div>
               <h2 className="text-xl font-black uppercase tracking-tighter mb-2">Solicitud Enviada</h2>
               <p className="text-slate-500 text-[10px] font-bold leading-relaxed mb-8 uppercase tracking-widest">
-                Tu solicitud ha sido enviada a Katherine. Recibirás un correo cuando tu acceso sea autorizado.
+                Tu solicitud de registro ha sido enviada exitosamente. Katherine recibirá un correo para autorizar tu acceso. Te notificaremos cuando puedas ingresar.
               </p>
-              <button onClick={() => setIsPendingApproval(false)} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 transition-all shadow-xl">Volver al Inicio</button>
+              <button onClick={() => setIsPendingApproval(false)} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 transition-all shadow-xl">Entendido</button>
             </div>
           ) : isRecoverMode ? (
             <div className="animate-fadeIn">
