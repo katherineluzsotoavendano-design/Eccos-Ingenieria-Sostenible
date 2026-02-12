@@ -21,7 +21,7 @@ export enum FlowType {
   CFF = 'CFF'
 }
 
-export type UserRole = 'ADMIN' | 'OPERATOR' | 'VIEWER';
+export type UserRole = 'Gerente General' | 'Asistente de Gerencia' | 'Gerente de Proyectos' | 'Asistente de Proyectos';
 
 export interface User {
   email: string;
