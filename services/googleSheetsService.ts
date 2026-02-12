@@ -1,14 +1,13 @@
 import { FinancialRecord, ApiResponse, User, UserRole } from "../types";
 
 /**
- * URL de la Aplicación Web de Google Apps Script. 
- * Esta versión incluye la lógica de validación de duplicados y recuperación de contraseña.
+ * URL de la Aplicación Web de Google Apps Script proporcionada por el usuario.
  */
 const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbziBZ7ZmTMqUnoiz-KlgOhERBg-lZX5aA5c0jP20XAIILKPFz5J5VIRaDWrv8hZ-NDcsw/exec';
 
 const handleGasResponse = (text: string) => {
-  // Verificación de si Katherine necesita autorizar el script manualmente
-  if (text.includes("MailApp.sendEmail") || text.includes("script.send_mail")) {
+  // Detecta si el script falló por falta de autorización para enviar correos
+  if (text.includes("MailApp.sendEmail") || text.includes("script.send_mail") || text.includes("Authorization is required")) {
     return { 
       success: false, 
       error: "⚠️ PERMISOS REQUERIDOS: Katherine debe entrar al editor de Google Apps Script, ejecutar 'autorizarManual' una vez y realizar una 'Nueva Implementación'." 
@@ -22,7 +21,8 @@ const handleGasResponse = (text: string) => {
   try {
     return JSON.parse(text);
   } catch (e) {
-    if (text.length > 0 && text.length < 500) {
+    // Si la respuesta es un texto plano exitoso pero no JSON
+    if (text.length > 0 && text.length < 500 && (text.includes("enviado") || text.includes("éxito") || text.includes("success"))) {
       return { success: true, message: text };
     }
     return { success: false, error: "Respuesta inesperada del servidor central." };
@@ -39,7 +39,7 @@ export const loginUser = async (email: string, password: string): Promise<ApiRes
     const text = await response.text();
     const result = handleGasResponse(text);
     if (result.success && result.user) return { success: true, data: result.user };
-    return { success: false, error: result.error || "Credenciales incorrectas." };
+    return { success: false, error: result.error || "Credenciales incorrectas o cuenta no autorizada." };
   } catch (e) {
     return { success: false, error: "Error de red al intentar iniciar sesión." };
   }
@@ -47,7 +47,6 @@ export const loginUser = async (email: string, password: string): Promise<ApiRes
 
 export const registerUser = async (name: string, email: string, password: string, role: UserRole): Promise<ApiResponse<void>> => {
   try {
-    // Aseguramos que las llaves correspondan a lo que espera el script: name, email, password, role
     const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -71,7 +70,7 @@ export const recoverPassword = async (email: string): Promise<ApiResponse<string
     const text = await response.text();
     const result = handleGasResponse(text);
     return result.success 
-      ? { success: true, data: result.message || "Se ha enviado tu contraseña al correo corporativo." } 
+      ? { success: true, data: result.message || "Se ha enviado tu contraseña al correo corporativo registrado." } 
       : { success: false, error: result.error };
   } catch (e) {
     return { success: false, error: "Error de conexión al intentar recuperar la clave." };
