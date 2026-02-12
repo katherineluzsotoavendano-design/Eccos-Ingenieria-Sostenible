@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   processDocument, 
@@ -6,7 +5,7 @@ import {
   fetchRecordsFromExternalDatabase, 
   updateRecordInDatabase
 } from './services/geminiService';
-import { saveToGoogleSheets, loginUser, registerUser } from './services/googleSheetsService';
+import { saveToGoogleSheets, loginUser, registerUser, recoverPassword } from './services/googleSheetsService';
 import { FinancialRecord, ExtractedData, TransactionCategory, OperationState, User, UserRole } from './types';
 import ClassificationForm from './components/ClassificationForm';
 import ManagementTable from './components/ManagementTable';
@@ -23,6 +22,7 @@ enum AppView {
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [isRecoverMode, setIsRecoverMode] = useState(false);
   const [isPendingApproval, setIsPendingApproval] = useState(false);
   
   const [loginEmail, setLoginEmail] = useState('');
@@ -65,7 +65,7 @@ const App: React.FC = () => {
       setUser(res.data);
       localStorage.setItem('fincore_session', JSON.stringify(res.data));
     } else {
-      alert(res.error || "Credenciales incorrectas o acceso no autorizado.");
+      alert(res.error || "Credenciales incorrectas.");
     }
     setIsLoggingIn(false);
   };
@@ -79,6 +79,20 @@ const App: React.FC = () => {
       setIsRegisterMode(false);
     } else {
       alert(res.error || "Error al solicitar registro.");
+    }
+    setIsLoggingIn(false);
+  };
+
+  const handleRecover = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginEmail) return alert("Por favor ingresa tu email corporativo.");
+    setIsLoggingIn(true);
+    const res = await recoverPassword(loginEmail);
+    if (res.success) {
+      alert(res.data || "Se ha enviado un correo con tus credenciales.");
+      setIsRecoverMode(false);
+    } else {
+      alert(res.error || "No se pudo recuperar la contraseña.");
     }
     setIsLoggingIn(false);
   };
@@ -111,23 +125,18 @@ const App: React.FC = () => {
 
   const onRecordSaved = async (record: FinancialRecord) => {
     setIsSyncing(true);
-    
     try {
       const cloudRes = await saveToGoogleSheets(record, currentFileBase64 || undefined, currentFileMime || undefined);
-      
       const recordWithUrl = {
         ...record,
         driveUrl: cloudRes.success ? cloudRes.data?.driveUrl : undefined
       };
-
       await saveToExternalDatabase(recordWithUrl);
-      
       if (cloudRes.success) {
         setSuccessMessage("✅ Registro completado y archivo guardado en Google Drive.");
       } else {
         setSuccessMessage("✅ Registro local guardado. (Sincronización Cloud pendiente)");
       }
-      
       setRecords([recordWithUrl, ...records]);
     } catch (err) {
       console.error(err);
@@ -143,8 +152,8 @@ const App: React.FC = () => {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl p-10 animate-fadeIn">
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6 text-slate-800">
+        <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl p-10 animate-fadeIn relative overflow-hidden">
           <div className="flex justify-center mb-8">
             <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black italic text-2xl shadow-xl shadow-blue-500/30">F</div>
           </div>
@@ -158,21 +167,29 @@ const App: React.FC = () => {
               <p className="text-slate-500 text-[10px] font-bold leading-relaxed mb-8 uppercase tracking-widest">
                 Tu solicitud ha sido enviada a Katherine. Recibirás un correo cuando tu acceso sea autorizado.
               </p>
-              <button 
-                onClick={() => setIsPendingApproval(false)}
-                className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 transition-all shadow-xl"
-              >
-                Volver al Inicio
-              </button>
+              <button onClick={() => setIsPendingApproval(false)} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 transition-all shadow-xl">Volver al Inicio</button>
+            </div>
+          ) : isRecoverMode ? (
+            <div className="animate-fadeIn">
+              <h2 className="text-2xl font-black text-center tracking-tighter uppercase mb-1">Recuperar Clave</h2>
+              <p className="text-slate-400 text-center font-bold text-[9px] uppercase tracking-widest mb-8">FINCORE AI - SISTEMA DE AUDITORÍA</p>
+              <form onSubmit={handleRecover} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Email Corporativo</label>
+                  <input type="email" required value={loginEmail} onChange={e => setLoginEmail(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 font-bold text-sm outline-none transition-all" placeholder="usuario@fincore.com" />
+                </div>
+                <button disabled={isLoggingIn} type="submit" className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 transition-all shadow-xl disabled:opacity-50">
+                  {isLoggingIn ? 'Enviando...' : 'Recuperar Contraseña'}
+                </button>
+                <button type="button" onClick={() => setIsRecoverMode(false)} className="w-full text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2">Volver</button>
+              </form>
             </div>
           ) : (
             <>
               <h2 className="text-2xl font-black text-center tracking-tighter uppercase mb-1">
                 {isRegisterMode ? 'Crear Cuenta' : 'Acceso Central'}
               </h2>
-              <p className="text-slate-400 text-center font-bold text-[9px] uppercase tracking-widest mb-8">
-                Fincore AI - Treasury Intelligence
-              </p>
+              <p className="text-slate-400 text-center font-bold text-[9px] uppercase tracking-widest mb-8">Fincore AI - Treasury Intelligence</p>
               <form onSubmit={isRegisterMode ? handleRegister : handleLogin} className="space-y-4">
                 {isRegisterMode && (
                   <div className="space-y-1">
@@ -184,10 +201,12 @@ const App: React.FC = () => {
                   <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Email Corporativo</label>
                   <input type="email" required value={isRegisterMode ? regEmail : loginEmail} onChange={e => isRegisterMode ? setRegEmail(e.target.value) : setLoginEmail(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 font-bold text-sm outline-none transition-all" placeholder="usuario@fincore.com" />
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Contraseña</label>
-                  <input type="password" required value={isRegisterMode ? regPass : loginPass} onChange={e => isRegisterMode ? setRegPass(e.target.value) : setLoginPass(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 font-bold text-sm outline-none transition-all" placeholder="••••••••" />
-                </div>
+                {!isRecoverMode && (
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Contraseña</label>
+                    <input type="password" required value={isRegisterMode ? regPass : loginPass} onChange={e => isRegisterMode ? setRegPass(e.target.value) : setLoginPass(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 font-bold text-sm outline-none transition-all" placeholder="••••••••" />
+                  </div>
+                )}
                 {isRegisterMode && (
                   <div className="space-y-1">
                     <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Cargo / Rol</label>
@@ -203,10 +222,15 @@ const App: React.FC = () => {
                   {isLoggingIn ? 'Procesando...' : (isRegisterMode ? 'Solicitar Acceso' : 'Iniciar Sesión')}
                 </button>
               </form>
-              <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-                <button onClick={() => { setIsRegisterMode(!isRegisterMode); setIsPendingApproval(false); }} className="text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-700">
+              <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col gap-4 text-center">
+                <button onClick={() => { setIsRegisterMode(!isRegisterMode); setIsRecoverMode(false); }} className="text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-700">
                   {isRegisterMode ? '¿Ya tienes cuenta? Ingresa aquí' : '¿No tienes cuenta? Regístrate'}
                 </button>
+                {!isRegisterMode && (
+                  <button onClick={() => setIsRecoverMode(true)} className="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600">
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -216,7 +240,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
       <header className="bg-slate-900 text-white p-4 sticky top-0 z-50 shadow-xl">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-4 cursor-pointer" onClick={() => setView(AppView.UPLOAD)}>

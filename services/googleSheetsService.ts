@@ -2,30 +2,30 @@ import { FinancialRecord, ApiResponse, User, UserRole } from "../types";
 
 /**
  * URL de la Aplicación Web de Google Apps Script. 
- * Esta URL conecta con el backend que gestiona las hojas de cálculo 'INGRESOS' y 'EGRESOS'
- * y realiza la carga de archivos a Google Drive.
+ * Esta versión incluye la lógica de validación de duplicados y recuperación de contraseña.
  */
-const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbxvEkk2Q3NQd8iS9Ya16VNQiQUlYnky0CGZXDIU1WB9tFGE_TqOXSH_czDtSgnaHg5Zng/exec';
+const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbziBZ7ZmTMqUnoiz-KlgOhERBg-lZX5aA5c0jP20XAIILKPFz5J5VIRaDWrv8hZ-NDcsw/exec';
 
 const handleGasResponse = (text: string) => {
+  // Verificación de si Katherine necesita autorizar el script manualmente
   if (text.includes("MailApp.sendEmail") || text.includes("script.send_mail")) {
     return { 
       success: false, 
-      error: "⚠️ PERMISOS REQUERIDOS: Katherine debe entrar al editor de Google Apps Script, ejecutar 'autorizarManual' y realizar una 'Nueva Implementación'." 
+      error: "⚠️ PERMISOS REQUERIDOS: Katherine debe entrar al editor de Google Apps Script, ejecutar 'autorizarManual' una vez y realizar una 'Nueva Implementación'." 
     };
   }
   
-  if (text.includes("Exception") || text.includes("permission")) {
+  if (text.includes("Exception") || text.includes("permission") || text.includes("ReferenceError")) {
     return { success: false, error: "Error de servidor Google: " + text };
   }
 
   try {
     return JSON.parse(text);
   } catch (e) {
-    if (text.length > 0 && text.length < 300) {
+    if (text.length > 0 && text.length < 500) {
       return { success: true, message: text };
     }
-    return { success: false, error: "Respuesta inesperada del servidor de Google." };
+    return { success: false, error: "Respuesta inesperada del servidor central." };
   }
 };
 
@@ -41,12 +41,13 @@ export const loginUser = async (email: string, password: string): Promise<ApiRes
     if (result.success && result.user) return { success: true, data: result.user };
     return { success: false, error: result.error || "Credenciales incorrectas." };
   } catch (e) {
-    return { success: false, error: "Fallo de conexión con el servidor central." };
+    return { success: false, error: "Error de red al intentar iniciar sesión." };
   }
 };
 
 export const registerUser = async (name: string, email: string, password: string, role: UserRole): Promise<ApiResponse<void>> => {
   try {
+    // Aseguramos que las llaves correspondan a lo que espera el script: name, email, password, role
     const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -60,10 +61,23 @@ export const registerUser = async (name: string, email: string, password: string
   }
 };
 
-/**
- * Guarda el registro completo en Google Sheets.
- * Envía todos los metadatos extraídos por la IA y clasificados por el usuario.
- */
+export const recoverPassword = async (email: string): Promise<ApiResponse<string>> => {
+  try {
+    const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'recover', email }),
+    });
+    const text = await response.text();
+    const result = handleGasResponse(text);
+    return result.success 
+      ? { success: true, data: result.message || "Se ha enviado tu contraseña al correo corporativo." } 
+      : { success: false, error: result.error };
+  } catch (e) {
+    return { success: false, error: "Error de conexión al intentar recuperar la clave." };
+  }
+};
+
 export const saveToGoogleSheets = async (
   record: FinancialRecord, 
   fileBase64?: string, 
