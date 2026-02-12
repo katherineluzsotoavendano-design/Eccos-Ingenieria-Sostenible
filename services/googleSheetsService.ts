@@ -1,40 +1,29 @@
 import { FinancialRecord, ApiResponse, User, UserRole } from "../types";
 
 /**
- * URL de la Aplicación Web de Google Apps Script (Versión con Aprobación por Email).
+ * URL de la Aplicación Web de Google Apps Script.
  * Administradora: katherineluzsotoavendano@gmail.com
  */
-const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzUttlhF6DYSG3i1PkvH9tlN54N5x5t3l9h5Qefsde8KO-Kvvv-flka16_qnFktVWCXqg/exec';
+const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwBX2M1UBO0_Juq9vppagB1fGE3M_geQJ_bdLxxXdNQo9FF3kuDvytUPW3oHWNYAgAW5w/exec';
 
 const handleGasResponse = (text: string) => {
-  // 1. Error de Scope de Email o Identidad
-  if (text.includes("Session.getActiveUser") || text.includes("userinfo.email") || text.includes("permission")) {
+  // Manejo de errores de permisos conocidos
+  if (text.includes("Session.getActiveUser") || text.includes("permission")) {
     return { 
       success: false, 
-      error: "⚠️ ERROR DE IDENTIDAD/PERMISOS: Katherine debe verificar el archivo appsscript.json, agregar los scopes requeridos, ejecutar 'autorizarManual' y volver a Implementar." 
+      error: "⚠️ ERROR DE PERMISOS: Katherine debe ejecutar 'probarManual' en el editor de Scripts y autorizar." 
     };
-  }
-
-  // 2. Error general de autorización de MailApp
-  if (text.includes("Authorization is required") || text.includes("MailApp.sendEmail") || text.includes("script.send_mail")) {
-    return { 
-      success: false, 
-      error: "⚠️ AUTORIZACIÓN PENDIENTE: Katherine debe entrar al editor de Google Scripts, ejecutar 'autorizarManual' una vez para habilitar Gmail y realizar una 'Nueva Implementación'." 
-    };
-  }
-  
-  if (text.includes("Exception") || text.includes("ReferenceError")) {
-    return { success: false, error: "Error técnico en Google Sheets: " + text };
   }
 
   try {
-    return JSON.parse(text);
+    const json = JSON.parse(text);
+    return json;
   } catch (e) {
-    // Manejo de respuestas de texto plano exitosas (como las de aprobación)
-    if (text.length > 0 && text.length < 500 && (text.toLowerCase().includes("enviado") || text.toLowerCase().includes("éxito") || text.toLowerCase().includes("success"))) {
+    // Si no es JSON, verificar si es un mensaje de éxito en texto plano
+    if (text.length > 0 && text.length < 200 && (text.toLowerCase().includes("éxito") || text.toLowerCase().includes("success"))) {
       return { success: true, message: text };
     }
-    return { success: false, error: "El servidor de Google devolvió una respuesta no válida." };
+    return { success: false, error: "Error del Servidor: " + text.substring(0, 100) };
   }
 };
 
@@ -48,9 +37,9 @@ export const loginUser = async (email: string, password: string): Promise<ApiRes
     const text = await response.text();
     const result = handleGasResponse(text);
     if (result.success && result.user) return { success: true, data: result.user };
-    return { success: false, error: result.error || "Credenciales incorrectas o cuenta aún en revisión (PENDIENTE)." };
+    return { success: false, error: result.error || "No se pudo iniciar sesión." };
   } catch (e) {
-    return { success: false, error: "Error de red: No se pudo conectar con el sistema central." };
+    return { success: false, error: "Error de red: No hay conexión con el servidor de Google." };
   }
 };
 
@@ -65,7 +54,7 @@ export const registerUser = async (name: string, email: string, password: string
     const result = handleGasResponse(text);
     return result.success ? { success: true } : { success: false, error: result.error };
   } catch (e) {
-    return { success: false, error: "Error de red al registrar la solicitud de acceso." };
+    return { success: false, error: "Error al enviar solicitud de registro." };
   }
 };
 
@@ -78,11 +67,9 @@ export const recoverPassword = async (email: string): Promise<ApiResponse<string
     });
     const text = await response.text();
     const result = handleGasResponse(text);
-    return result.success 
-      ? { success: true, data: result.message || "Las credenciales han sido enviadas a tu correo corporativo." } 
-      : { success: false, error: result.error };
+    return result.success ? { success: true, data: result.message } : { success: false, error: result.error };
   } catch (e) {
-    return { success: false, error: "Error de conexión al intentar recuperar la clave." };
+    return { success: false, error: "Error de conexión al recuperar clave." };
   }
 };
 
@@ -92,17 +79,15 @@ export const saveToGoogleSheets = async (
   fileMimeType?: string
 ): Promise<ApiResponse<{ driveUrl?: string }>> => {
   try {
-    const payload = { 
-      ...record,
-      action: 'save',
-      fileBase64: fileBase64, 
-      fileMimeType: fileMimeType
-    };
-
     const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ 
+        ...record, 
+        action: 'save', 
+        fileBase64, 
+        fileMimeType 
+      }),
     });
 
     const text = await response.text();
@@ -112,6 +97,6 @@ export const saveToGoogleSheets = async (
       ? { success: true, data: { driveUrl: result.driveUrl } } 
       : { success: false, error: result.error };
   } catch (e: any) {
-    return { success: false, error: "Fallo en la sincronización con Google Drive: " + e.message };
+    return { success: false, error: "Fallo en la sincronización Cloud." };
   }
 };
