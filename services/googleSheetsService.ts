@@ -4,7 +4,7 @@ import { FinancialRecord, ApiResponse, User, UserRole } from "../types";
 /**
  * URL de la Aplicación Web de Google Apps Script actualizada por Katherine.
  */
-const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbzKYiZllUifYQ3GJsL9VUyvCLjQIqGhdacp3U3maGlidyOmfJR92tqsjb8_ZvpTZlEvGw/exec';
+const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbRPrv_kz2Y9gsdE8NR5JnvAQYyyWgZRO_Rj_DaUTUJEapTQUKXJRzz1iEsULvLzWiWAQ/exec';
 
 const handleGasResponse = (text: string) => {
   if (text.includes("Session.getActiveUser") || text.includes("permission")) {
