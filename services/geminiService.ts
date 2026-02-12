@@ -1,6 +1,5 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
-import { ExtractedData, FinancialRecord, ApiResponse, TransactionCategory } from "../types";
+import { ExtractedData, FinancialRecord, ApiResponse, TransactionCategory, PaymentMode, FlowType } from "../types";
 import { supabase } from "./supabaseClient";
 
 export const isApiKeyConfigured = (): boolean => {
@@ -15,13 +14,11 @@ export const processDocument = async (base64: string, mimeType: string, category
   
   const systemPrompt = isIncome 
     ? `EXTRACCIÓN PARA INGRESOS (VENTAS): 
-       Debes extraer los datos del CLIENTE / ADQUIRIENTE (Destinatario del documento). 
-       NO extraigas los datos de la empresa que emite la factura. 
+       Debes extraer los datos del CLIENTE / ADQUIRIENTE. 
        Busca etiquetas como: "Señor(es)", "Adquiriente", "Cliente", "Razón Social del Cliente".`
     : `EXTRACCIÓN PARA EGRESOS (COMPRAS/GASTOS): 
-       Debes extraer los datos del PROVEEDOR (Emisor del documento). 
-       Extrae el RUC y Razón Social que aparece en la cabecera principal como emisor.
-       Busca etiquetas como: "Emisor", "Vendedor", o el logo principal de la empresa proveedora.`;
+       Debes extraer los datos del PROVEEDOR (Emisor). 
+       Extrae el RUC y Razón Social que aparece en la cabecera principal como emisor.`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
@@ -31,13 +28,15 @@ export const processDocument = async (base64: string, mimeType: string, category
         {
           text: `${systemPrompt}
           
-          DATOS ADICIONALES A EXTRAER:
-          - Monto total, fecha (YYYY-MM-DD) y moneda (PEN, USD).
-          - Número de factura / Comprobante.
-          - Monto de Detracción si existe.
-          - Condición de pago: "CONTADO" o "CREDITO". Si es crédito, busca la fecha de vencimiento.
+          DATOS OBLIGATORIOS Y DETALLADOS A EXTRAER:
+          - Monto total bruto, IGV/Tax (si hay), fecha (YYYY-MM-DD) y moneda (PEN, USD).
+          - Número de factura o boleta completo (Serie-Número).
+          - Monto de Detracción (si aplica, busca porcentajes del 10%, 12%, etc).
+          - Condición de pago: "CONTADO" o "CREDITO". Si es crédito, extrae la fecha de vencimiento.
+          - Sugiere un Tipo de Flujo: "CFO" (Operativo), "CFI" (Inversión) o "CFF" (Financiamiento).
+          - Para egresos, identifica si es un gasto de "Capacitaciones", "Consultoría", "Auditoría" o "Gastos Generales".
           
-          Responde estrictamente en formato JSON siguiendo el esquema.`
+          Responde estrictamente en formato JSON.`
         }
       ]
     },
@@ -46,8 +45,8 @@ export const processDocument = async (base64: string, mimeType: string, category
       responseSchema: {
         type: Type.OBJECT,
         properties: {
-          vendor: { type: Type.STRING, description: isIncome ? "Razón Social del CLIENTE" : "Razón Social del PROVEEDOR" },
-          taxId: { type: Type.STRING, description: isIncome ? "RUC del CLIENTE" : "RUC del PROVEEDOR" },
+          vendor: { type: Type.STRING, description: isIncome ? "Cliente" : "Proveedor" },
+          taxId: { type: Type.STRING, description: "RUC/ID Fiscal" },
           date: { type: Type.STRING },
           amount: { type: Type.NUMBER },
           currency: { type: Type.STRING },
@@ -56,6 +55,9 @@ export const processDocument = async (base64: string, mimeType: string, category
           detractionAmount: { type: Type.NUMBER },
           paymentMode: { type: Type.STRING, enum: ["CONTADO", "CREDITO"] },
           creditDate: { type: Type.STRING },
+          flowType: { type: Type.STRING, enum: ["CFO", "CFI", "CFF"] },
+          serviceLine: { type: Type.STRING },
+          costType: { type: Type.STRING, enum: ["FIJO", "VARIABLE"] }
         },
         required: ["vendor", "taxId", "date", "amount", "currency", "invoiceNumber"]
       }
@@ -74,7 +76,7 @@ export const processVoucher = async (base64: string, mimeType: string): Promise<
     contents: {
       parts: [
         { inlineData: { mimeType, data: base64 } },
-        { text: "Extract the transaction amount and the date from this bank payment voucher/transfer image. Return JSON with 'amount' (number) and 'date' (YYYY-MM-DD)." }
+        { text: "Extract the transaction amount and the date from this bank payment voucher. Return JSON with 'amount' (number) and 'date' (YYYY-MM-DD)." }
       ]
     },
     config: {
@@ -98,14 +100,13 @@ export const saveToExternalDatabase = async (record: FinancialRecord): Promise<A
     if (error) throw error;
     return { success: true };
   } catch (e: any) {
-    console.warn("Supabase Sync skipped (Supabase error):", e.message);
+    console.warn("Supabase Sync skipped:", e.message);
     return { success: false, error: e.message };
   }
 };
 
 export const fetchRecordsFromExternalDatabase = async (): Promise<FinancialRecord[]> => {
   try {
-    // Intentamos traer datos con un timeout implícito
     const { data, error } = await supabase
       .from('financial_records')
       .select('*')
@@ -114,8 +115,7 @@ export const fetchRecordsFromExternalDatabase = async (): Promise<FinancialRecor
     if (error) throw error;
     return (data as FinancialRecord[]) || [];
   } catch (e: any) {
-    console.error("Error al obtener registros de Supabase (Failed to fetch):", e.message);
-    // IMPORTANTE: Retornamos lista vacía en lugar de lanzar error para que la App cargue
+    console.error("Error fetching records:", e.message);
     return [];
   }
 };
