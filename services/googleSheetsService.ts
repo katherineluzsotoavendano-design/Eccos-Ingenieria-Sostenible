@@ -2,16 +2,17 @@
 import { FinancialRecord, ApiResponse, User, UserRole } from "../types";
 
 /**
- * URL de la Aplicación Web de Google Apps Script v3.0 (Organización por mes y correos).
+ * URL de la Aplicación Web de Google Apps Script v3.3.
+ * Esta URL se comunica con las hojas USUARIOS, INGRESOS y EGRESOS.
  */
-const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwrTqF4gSiCZF3M3nxP0ZMeAYimtjy1ipIc5LY-eM3Fo2epmk9WCW003hcsWg0PtrTY9Q/exec';
+const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbxVrgx71bwJgMD8CSQ5M0Dc0tN3nb-hDyPC58fZRBnOPl9LwsBveqiqcQjVW8Piv3kEXQ/exec';
 
 const handleGasResponse = (text: string) => {
-  // Captura errores de permisos o sesiones de Google que vienen como HTML
-  if (text.includes("Session.getActiveUser") || text.includes("permission") || text.includes("<!DOCTYPE html>") || text.includes("Google Drive - Quota exceeded")) {
+  // Manejo de errores de sesión o permisos de Google
+  if (text.includes("Session.getActiveUser") || text.includes("permission") || text.includes("<!DOCTYPE html>")) {
     return { 
       success: false, 
-      error: "⚠️ ERROR DE SERVIDOR: El script de Google no tiene permisos o ha excedido su cuota. Por favor, revisa la autorización en Apps Script." 
+      error: "⚠️ ERROR DE VÍNCULO: El script de Google no puede acceder a las hojas o no está vinculado correctamente. Abre la hoja de cálculo, ve a Extensiones > Apps Script y asegúrate de haber implementado el código correctamente." 
     };
   }
 
@@ -19,11 +20,8 @@ const handleGasResponse = (text: string) => {
     const json = JSON.parse(text);
     return json;
   } catch (e) {
-    console.error("Respuesta no válida de GAS:", text);
-    if (text.length > 0 && text.length < 200) {
-       return { success: false, error: text };
-    }
-    return { success: false, error: "Error en el formato de respuesta del servidor de Google." };
+    console.error("Respuesta cruda de Google:", text);
+    return { success: false, error: "El servidor de Google devolvió una respuesta inesperada. Verifica que el Apps Script esté publicado como 'Cualquier persona' (Anyone)." };
   }
 };
 
@@ -37,9 +35,9 @@ export const loginUser = async (email: string, password: string): Promise<ApiRes
     const text = await response.text();
     const result = handleGasResponse(text);
     if (result.success && result.user) return { success: true, data: result.user };
-    return { success: false, error: result.error || "Acceso denegado. Verifica tu correo y contraseña." };
+    return { success: false, error: result.error || "Credenciales no encontradas en la hoja USUARIOS." };
   } catch (e) {
-    return { success: false, error: "Error de conexión con Google." };
+    return { success: false, error: "Fallo de conexión con el servidor de autenticación." };
   }
 };
 
@@ -69,7 +67,7 @@ export const saveToGoogleSheets = async (
       ? { success: true, data: { driveUrl: result.driveUrl } } 
       : { success: false, error: result.error };
   } catch (e: any) {
-    return { success: false, error: "Error de sincronización con la hoja de cálculo y Drive." };
+    return { success: false, error: "Error al sincronizar con las hojas INGRESOS/EGRESOS." };
   }
 };
 
@@ -84,7 +82,7 @@ export const registerUser = async (name: string, email: string, password: string
     const result = handleGasResponse(text);
     return result.success ? { success: true } : { success: false, error: result.error };
   } catch (e) {
-    return { success: false, error: "Fallo al conectar con el servicio de registro." };
+    return { success: false, error: "No se pudo enviar la solicitud de registro." };
   }
 };
 
@@ -99,6 +97,6 @@ export const recoverPassword = async (email: string): Promise<ApiResponse<string
     const result = handleGasResponse(text);
     return result.success ? { success: true, data: result.message } : { success: false, error: result.error };
   } catch (e) {
-    return { success: false, error: "Error de comunicación con el servidor de correos." };
+    return { success: false, error: "Error al intentar recuperar la clave." };
   }
 };
