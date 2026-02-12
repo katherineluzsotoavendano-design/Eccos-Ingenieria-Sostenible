@@ -14,14 +14,15 @@ interface Props {
 }
 
 const ClassificationForm: React.FC<Props> = ({ data, initialCategory, onSave, onCancel }) => {
+  const isIncome = initialCategory === TransactionCategory.INGRESO;
   const [isPaid, setIsPaid] = useState(false);
   const [formData, setFormData] = useState<ExtractedData>({
     ...data,
     paymentMode: data.paymentMode || PaymentMode.CONTADO,
     flowType: FlowType.CFO,
-    incomeType: initialCategory === TransactionCategory.INGRESO ? 'VENTAS' : undefined,
+    incomeType: isIncome ? 'VENTAS' : undefined,
     serviceLine: data.serviceLine || undefined,
-    costType: data.costType || 'FIJO',
+    costType: isIncome ? undefined : 'FIJO',
     depositedTo: undefined
   });
   
@@ -43,7 +44,7 @@ const ClassificationForm: React.FC<Props> = ({ data, initialCategory, onSave, on
         }));
         setIsPaid(true);
       } catch (err) {
-        alert("No se pudo leer el voucher automáticamente.");
+        alert("Error al leer el voucher automáticamente.");
       } finally {
         setIsProcessingVoucher(false);
       }
@@ -53,8 +54,17 @@ const ClassificationForm: React.FC<Props> = ({ data, initialCategory, onSave, on
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Construimos el registro asegurando que los campos sean correctos según categoría
+    const cleanFormData = { ...formData };
+    if (!isIncome) {
+      delete cleanFormData.paymentMode;
+      delete cleanFormData.creditDate;
+      delete cleanFormData.incomeType;
+    }
+
     const newRecord: FinancialRecord = {
-      ...formData,
+      ...cleanFormData,
       id: crypto.randomUUID(),
       category: initialCategory,
       operationState: isPaid ? OperationState.CONCILIADO : OperationState.PENDIENTE,
@@ -71,7 +81,7 @@ const ClassificationForm: React.FC<Props> = ({ data, initialCategory, onSave, on
           <h2 className="text-3xl font-black tracking-tighter uppercase mb-2">Clasificación de Documento</h2>
           <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">Katherine Luz Soto Avendaño | Auditoría Operativa</p>
         </div>
-        <div className={`px-8 py-4 rounded-3xl font-black text-xs uppercase tracking-widest border-2 ${initialCategory === TransactionCategory.INGRESO ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
+        <div className={`px-8 py-4 rounded-3xl font-black text-xs uppercase tracking-widest border-2 ${isIncome ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
           {initialCategory}
         </div>
       </div>
@@ -83,7 +93,7 @@ const ClassificationForm: React.FC<Props> = ({ data, initialCategory, onSave, on
 
         <div className="space-y-1">
           <label className="text-[9px] font-black uppercase text-slate-400 ml-4">
-            {initialCategory === TransactionCategory.INGRESO ? 'Cliente' : 'Proveedor'}
+            {isIncome ? 'Cliente' : 'Proveedor'}
           </label>
           <input type="text" value={formData.vendor} onChange={e => setFormData({...formData, vendor: e.target.value})} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 font-bold text-sm outline-none transition-all" />
         </div>
@@ -106,7 +116,7 @@ const ClassificationForm: React.FC<Props> = ({ data, initialCategory, onSave, on
           <input type="number" step="0.01" value={formData.detractionAmount || 0} onChange={e => setFormData({...formData, detractionAmount: parseFloat(e.target.value)})} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 font-bold text-sm outline-none transition-all" />
         </div>
 
-        {initialCategory === TransactionCategory.INGRESO ? (
+        {isIncome ? (
           <div className="space-y-1">
             <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Condición de Pago</label>
             <div className="flex gap-2">
@@ -146,7 +156,7 @@ const ClassificationForm: React.FC<Props> = ({ data, initialCategory, onSave, on
           </select>
         </div>
 
-        {initialCategory === TransactionCategory.INGRESO ? (
+        {isIncome ? (
           <>
             <div className="space-y-1">
               <label className="text-[9px] font-black uppercase text-slate-400 ml-4">Tipo de Ingreso</label>
@@ -202,7 +212,7 @@ const ClassificationForm: React.FC<Props> = ({ data, initialCategory, onSave, on
           </>
         )}
 
-        {initialCategory === TransactionCategory.EGRESO && (
+        {!isIncome && (
           <div className="md:col-span-3 mt-4">
             <div className="bg-indigo-50/50 p-8 rounded-[40px] border-2 border-indigo-100 relative group overflow-hidden shadow-inner">
                <div className="flex flex-col md:flex-row gap-8 items-center relative z-10">
@@ -231,7 +241,7 @@ const ClassificationForm: React.FC<Props> = ({ data, initialCategory, onSave, on
 
         <div className="md:col-span-3 flex gap-4 pt-10">
           <button type="submit" className="flex-grow bg-slate-900 text-white rounded-[24px] py-5 font-black uppercase tracking-widest text-xs hover:bg-blue-600 transition-all shadow-xl shadow-blue-500/10">
-            Guardar en Sheets y Drive
+            Sincronizar en Sheets y Drive
           </button>
           <button type="button" onClick={onCancel} className="px-10 bg-slate-100 text-slate-500 rounded-[24px] py-5 font-black uppercase tracking-widest text-xs hover:bg-slate-200 transition-all">
             Descartar
