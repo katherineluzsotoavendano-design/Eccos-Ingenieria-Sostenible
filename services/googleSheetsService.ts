@@ -4,14 +4,13 @@ import { FinancialRecord, ApiResponse, User, UserRole } from "../types";
  * URL de la Aplicación Web de Google Apps Script.
  * Administradora: katherineluzsotoavendano@gmail.com
  */
-const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwBX2M1UBO0_Juq9vppagB1fGE3M_geQJ_bdLxxXdNQo9FF3kuDvytUPW3oHWNYAgAW5w/exec';
+const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbz8eoNoB9swzxuA-FYL4A6meOvrW3kUBhw57iCr5Ns4sS3vbbiC0BdU6Qnee9iUOgTGsQ/exec';
 
 const handleGasResponse = (text: string) => {
-  // Manejo de errores de permisos conocidos
   if (text.includes("Session.getActiveUser") || text.includes("permission")) {
     return { 
       success: false, 
-      error: "⚠️ ERROR DE PERMISOS: Katherine debe ejecutar 'probarManual' en el editor de Scripts y autorizar." 
+      error: "⚠️ ERROR DE PERMISOS: Katherine debe autorizar el script en el editor de Google." 
     };
   }
 
@@ -19,7 +18,6 @@ const handleGasResponse = (text: string) => {
     const json = JSON.parse(text);
     return json;
   } catch (e) {
-    // Si no es JSON, verificar si es un mensaje de éxito en texto plano
     if (text.length > 0 && text.length < 200 && (text.toLowerCase().includes("éxito") || text.toLowerCase().includes("success"))) {
       return { success: true, message: text };
     }
@@ -39,7 +37,7 @@ export const loginUser = async (email: string, password: string): Promise<ApiRes
     if (result.success && result.user) return { success: true, data: result.user };
     return { success: false, error: result.error || "No se pudo iniciar sesión." };
   } catch (e) {
-    return { success: false, error: "Error de red: No hay conexión con el servidor de Google." };
+    return { success: false, error: "Error de red: No hay conexión con Google." };
   }
 };
 
@@ -54,7 +52,7 @@ export const registerUser = async (name: string, email: string, password: string
     const result = handleGasResponse(text);
     return result.success ? { success: true } : { success: false, error: result.error };
   } catch (e) {
-    return { success: false, error: "Error al enviar solicitud de registro." };
+    return { success: false, error: "Error al enviar registro." };
   }
 };
 
@@ -69,7 +67,7 @@ export const recoverPassword = async (email: string): Promise<ApiResponse<string
     const result = handleGasResponse(text);
     return result.success ? { success: true, data: result.message } : { success: false, error: result.error };
   } catch (e) {
-    return { success: false, error: "Error de conexión al recuperar clave." };
+    return { success: false, error: "Error de conexión." };
   }
 };
 
@@ -79,6 +77,8 @@ export const saveToGoogleSheets = async (
   fileMimeType?: string
 ): Promise<ApiResponse<{ driveUrl?: string }>> => {
   try {
+    // Enviamos el registro completo. El campo 'category' ('INGRESO' o 'EGRESO') 
+    // será usado por el Apps Script para decidir en qué hoja guardar.
     const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -97,6 +97,6 @@ export const saveToGoogleSheets = async (
       ? { success: true, data: { driveUrl: result.driveUrl } } 
       : { success: false, error: result.error };
   } catch (e: any) {
-    return { success: false, error: "Fallo en la sincronización Cloud." };
+    return { success: false, error: "Fallo en la sincronización multi-hoja." };
   }
 };
