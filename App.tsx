@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   processDocument, 
@@ -60,41 +61,56 @@ const App: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
-    const res = await loginUser(loginEmail, loginPass);
-    if (res.success && res.data) {
-      setUser(res.data);
-      localStorage.setItem('fincore_session', JSON.stringify(res.data));
-    } else {
-      alert(res.error || "Credenciales incorrectas o acceso no autorizado.");
+    try {
+      const res = await loginUser(loginEmail, loginPass);
+      if (res.success && res.data) {
+        setUser(res.data);
+        localStorage.setItem('fincore_session', JSON.stringify(res.data));
+      } else {
+        alert(res.error || "Credenciales incorrectas o acceso no autorizado.");
+      }
+    } catch (err) {
+      alert("Error crítico al intentar iniciar sesión.");
+    } finally {
+      setIsLoggingIn(false);
     }
-    setIsLoggingIn(false);
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
-    const res = await registerUser(regName, regEmail, regPass, regRole);
-    if (res.success) {
-      setIsPendingApproval(true);
-      setIsRegisterMode(false);
-    } else {
-      alert(res.error || "Error al solicitar registro.");
+    try {
+      const res = await registerUser(regName, regEmail, regPass, regRole);
+      if (res.success) {
+        setIsPendingApproval(true);
+        setIsRegisterMode(false);
+      } else {
+        alert(res.error || "No se pudo completar el registro. Verifica que el script tenga permisos de envío.");
+      }
+    } catch (err) {
+      alert("Error de red al intentar registrar.");
+    } finally {
+      setIsLoggingIn(false);
     }
-    setIsLoggingIn(false);
   };
 
   const handleRecover = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!loginEmail) return alert("Por favor ingresa tu email corporativo.");
     setIsLoggingIn(true);
-    const res = await recoverPassword(loginEmail);
-    if (res.success) {
-      alert(res.data || "Se ha enviado un correo con tus credenciales.");
-      setIsRecoverMode(false);
-    } else {
-      alert(res.error || "No se pudo recuperar la contraseña.");
+    try {
+      const res = await recoverPassword(loginEmail);
+      if (res.success) {
+        alert("📧 " + (res.data || "Se ha enviado un correo con tus credenciales. Revisa tu bandeja de entrada o SPAM."));
+        setIsRecoverMode(false);
+      } else {
+        alert("⚠️ " + (res.error || "No se pudo recuperar la contraseña. Asegúrate de que el email esté registrado."));
+      }
+    } catch (err) {
+      alert("Error al intentar conectar con el servidor de correos.");
+    } finally {
+      setIsLoggingIn(false);
     }
-    setIsLoggingIn(false);
   };
 
   const handleLogout = () => {
@@ -179,7 +195,7 @@ const App: React.FC = () => {
                   <input type="email" required value={loginEmail} onChange={e => setLoginEmail(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 font-bold text-sm outline-none transition-all" placeholder="usuario@fincore.com" />
                 </div>
                 <button disabled={isLoggingIn} type="submit" className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 transition-all shadow-xl disabled:opacity-50">
-                  {isLoggingIn ? 'Enviando...' : 'Recuperar Contraseña'}
+                  {isLoggingIn ? 'Enviando Correo...' : 'Recuperar Contraseña'}
                 </button>
                 <button type="button" onClick={() => setIsRecoverMode(false)} className="w-full text-[10px] font-black uppercase tracking-widest text-slate-400 mt-2">Volver</button>
               </form>

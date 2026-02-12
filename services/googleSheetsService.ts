@@ -3,14 +3,16 @@ import { FinancialRecord, ApiResponse, User, UserRole } from "../types";
 
 /**
  * URL de la Aplicación Web de Google Apps Script actualizada por Katherine.
+ * Esta versión incluye las correcciones para los controles de validación por correo.
  */
-const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbRPrv_kz2Y9gsdE8NR5JnvAQYyyWgZRO_Rj_DaUTUJEapTQUKXJRzz1iEsULvLzWiWAQ/exec';
+const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbxMzUi7sEMgW7RabyBXToXlI6Z_TAuZkHvXv4CtTMiarysBZJ-hVtI8vrD9OSj6HlRONw/exec';
 
 const handleGasResponse = (text: string) => {
-  if (text.includes("Session.getActiveUser") || text.includes("permission")) {
+  // Captura errores de permisos o sesiones de Google que vienen como HTML
+  if (text.includes("Session.getActiveUser") || text.includes("permission") || text.includes("<!DOCTYPE html>") || text.includes("Google Drive - Quota exceeded")) {
     return { 
       success: false, 
-      error: "⚠️ ERROR DE PERMISOS: Debes autorizar el script en el editor de Google (Ejecutar una vez manualmente)." 
+      error: "⚠️ ERROR DE SERVIDOR: El script de Google no tiene permisos o ha excedido la cuota de correos. Por favor, verifica la autorización en Google Apps Script." 
     };
   }
 
@@ -18,7 +20,12 @@ const handleGasResponse = (text: string) => {
     const json = JSON.parse(text);
     return json;
   } catch (e) {
-    return { success: false, error: "Error en la respuesta del script." };
+    console.error("Respuesta no válida de GAS:", text);
+    // Si la respuesta no es JSON, a veces es un mensaje directo de error del script
+    if (text.length > 0 && text.length < 200) {
+       return { success: false, error: text };
+    }
+    return { success: false, error: "Error en el formato de respuesta del servidor de Google." };
   }
 };
 
@@ -32,7 +39,7 @@ export const loginUser = async (email: string, password: string): Promise<ApiRes
     const text = await response.text();
     const result = handleGasResponse(text);
     if (result.success && result.user) return { success: true, data: result.user };
-    return { success: false, error: result.error || "Acceso denegado." };
+    return { success: false, error: result.error || "Acceso denegado. Verifica tu correo y contraseña." };
   } catch (e) {
     return { success: false, error: "Error de conexión con Google." };
   }
@@ -44,7 +51,6 @@ export const saveToGoogleSheets = async (
   fileMimeType?: string
 ): Promise<ApiResponse<{ driveUrl?: string }>> => {
   try {
-    // Limpiamos datos que no corresponden a la categoría para evitar columnas vacías indeseadas
     const cleanData = { ...record };
     if (record.category === 'EGRESO') {
       delete (cleanData as any).creditDate;
@@ -85,7 +91,7 @@ export const registerUser = async (name: string, email: string, password: string
     const result = handleGasResponse(text);
     return result.success ? { success: true } : { success: false, error: result.error };
   } catch (e) {
-    return { success: false, error: "Fallo al registrar usuario." };
+    return { success: false, error: "Fallo al conectar con el servicio de registro." };
   }
 };
 
@@ -100,6 +106,6 @@ export const recoverPassword = async (email: string): Promise<ApiResponse<string
     const result = handleGasResponse(text);
     return result.success ? { success: true, data: result.message } : { success: false, error: result.error };
   } catch (e) {
-    return { success: false, error: "Error de comunicación." };
+    return { success: false, error: "Error de comunicación con el servidor de correos." };
   }
 };
