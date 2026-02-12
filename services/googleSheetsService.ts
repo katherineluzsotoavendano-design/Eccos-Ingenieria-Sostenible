@@ -1,10 +1,11 @@
+
 import { FinancialRecord, ApiResponse, User, UserRole } from "../types";
 
 /**
  * URL de la Aplicación Web de Google Apps Script.
  * Administradora: katherineluzsotoavendano@gmail.com
  */
-const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbz8eoNoB9swzxuA-FYL4A6meOvrW3kUBhw57iCr5Ns4sS3vbbiC0BdU6Qnee9iUOgTGsQ/exec';
+const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwVVdY5Eqnn8al0C92GzciPyCzoy3bQYFmXpSkdj0LqG4rDmgSe-q_Jd-jBwolYp_KINA/exec';
 
 const handleGasResponse = (text: string) => {
   if (text.includes("Session.getActiveUser") || text.includes("permission")) {
@@ -77,8 +78,6 @@ export const saveToGoogleSheets = async (
   fileMimeType?: string
 ): Promise<ApiResponse<{ driveUrl?: string }>> => {
   try {
-    // Enviamos el registro completo. El campo 'category' ('INGRESO' o 'EGRESO') 
-    // será usado por el Apps Script para decidir en qué hoja guardar.
     const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },

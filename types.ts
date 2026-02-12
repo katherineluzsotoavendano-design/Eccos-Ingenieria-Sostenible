@@ -32,7 +32,7 @@ export interface User {
 export type IncomeType = 'VENTAS' | 'PRÉSTAMOS' | 'CAMBIO DE MONEDA' | 'INGRESOS FINANCIEROS';
 export type ServiceLine = 'Capacitaciones Ágiles/Presenciales' | 'Consultoría Ambiental' | 'Consultoría SIG' | 'Auditoría Tradicional' | 'Auditorías 360' | 'ECCOS GASTO';
 export type CostType = 'FIJO' | 'VARIABLE';
-export type Responsible = 'NATHALIA' | 'JOSÉ' | 'PAGO DIRECTO';
+export type DepositedTo = 'NATHALIA' | 'JOSÉ' | 'PAGO DIRECTO';
 
 export interface ExtractedData {
   vendor: string; 
@@ -49,7 +49,7 @@ export interface ExtractedData {
   incomeType?: IncomeType;
   serviceLine?: ServiceLine;
   costType?: CostType;
-  responsible?: Responsible;
+  depositedTo?: DepositedTo;
   voucherAmount?: number;
   voucherDate?: string;
   paidDate?: string;
@@ -61,7 +61,7 @@ export interface FinancialRecord extends ExtractedData {
   operationState: OperationState;
   isPaid: boolean;
   createdAt: string;
-  driveUrl?: string; // Nuevo campo para el enlace de Drive
+  driveUrl?: string;
 }
 
 export interface BankMovement {
