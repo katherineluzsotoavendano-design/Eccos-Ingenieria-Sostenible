@@ -62,6 +62,7 @@ export interface FinancialRecord extends ExtractedData {
   isPaid: boolean;
   createdAt: string;
   driveUrl?: string;
+  folderPath?: string[]; // Ejemplo: ["2026", "ENERO", "COMPRAS", "SERVICIOS"]
 }
 
 export interface BankMovement {

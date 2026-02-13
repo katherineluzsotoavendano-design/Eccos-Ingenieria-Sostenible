@@ -85,7 +85,7 @@ const App: React.FC = () => {
         setIsPendingApproval(true);
         setIsRegisterMode(false);
       } else {
-        alert(res.error || "No se pudo completar el registro. Verifica que el script tenga permisos de envío.");
+        alert(res.error || "No se pudo completar el registro.");
       }
     } catch (err) {
       alert("Error de red al intentar registrar.");
@@ -101,13 +101,13 @@ const App: React.FC = () => {
     try {
       const res = await recoverPassword(loginEmail);
       if (res.success) {
-        alert("📧 " + (res.data || "Se ha enviado un correo con tus credenciales. Revisa tu bandeja de entrada o SPAM."));
+        alert("📧 " + (res.data || "Correo enviado."));
         setIsRecoverMode(false);
       } else {
-        alert("⚠️ " + (res.error || "No se pudo recuperar la contraseña. Asegúrate de que el email esté registrado."));
+        alert("⚠️ " + (res.error || "No se pudo recuperar la contraseña."));
       }
     } catch (err) {
-      alert("Error al intentar conectar con el servidor de correos.");
+      alert("Error al intentar conectar con el servidor.");
     } finally {
       setIsLoggingIn(false);
     }
@@ -149,9 +149,9 @@ const App: React.FC = () => {
       };
       await saveToExternalDatabase(recordWithUrl);
       if (cloudRes.success) {
-        setSuccessMessage("✅ Registro completado y archivo guardado en Google Drive.");
+        setSuccessMessage("✅ Registro completado y archivado en Drive por categorías.");
       } else {
-        setSuccessMessage("✅ Registro local guardado. (Sincronización Cloud pendiente)");
+        setSuccessMessage("✅ Registro local guardado. (Drive pendiente)");
       }
       setRecords([recordWithUrl, ...records]);
     } catch (err) {
@@ -168,10 +168,10 @@ const App: React.FC = () => {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 sm:p-6 text-slate-800">
-        <div className="max-w-md w-full bg-white rounded-[32px] sm:rounded-[40px] shadow-2xl p-6 sm:p-10 animate-fadeIn relative overflow-hidden">
-          <div className="flex justify-center mb-6 sm:mb-8">
-            <div className="w-12 h-12 sm:w-14 sm:h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black italic text-xl sm:text-2xl shadow-xl shadow-blue-500/30">F</div>
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 text-slate-800">
+        <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl p-10 animate-fadeIn relative overflow-hidden">
+          <div className="flex justify-center mb-8">
+            <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black italic text-2xl shadow-xl shadow-blue-500/30">F</div>
           </div>
           
           {isPendingApproval ? (
@@ -180,14 +180,14 @@ const App: React.FC = () => {
                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
               </div>
               <h2 className="text-xl font-black uppercase tracking-tighter mb-2">Solicitud Enviada</h2>
-              <p className="text-slate-500 text-[10px] font-bold leading-relaxed mb-8 uppercase tracking-widest">
-                Tu solicitud de registro ha sido enviada exitosamente. Katherine recibirá un correo para autorizar tu acceso.
+              <p className="text-slate-500 text-[10px] font-bold leading-relaxed mb-8 uppercase tracking-widest text-center">
+                Tu solicitud está pendiente de aprobación por Katherine Luz Soto.
               </p>
               <button onClick={() => setIsPendingApproval(false)} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 transition-all shadow-xl">Entendido</button>
             </div>
           ) : isRecoverMode ? (
             <div className="animate-fadeIn">
-              <h2 className="text-xl sm:text-2xl font-black text-center tracking-tighter uppercase mb-1">Recuperar Clave</h2>
+              <h2 className="text-2xl font-black text-center tracking-tighter uppercase mb-1">Recuperar Clave</h2>
               <p className="text-slate-400 text-center font-bold text-[9px] uppercase tracking-widest mb-8">FINCORE AI - SISTEMA DE AUDITORÍA</p>
               <form onSubmit={handleRecover} className="space-y-4">
                 <div className="space-y-1">
@@ -202,10 +202,10 @@ const App: React.FC = () => {
             </div>
           ) : (
             <>
-              <h2 className="text-xl sm:text-2xl font-black text-center tracking-tighter uppercase mb-1">
+              <h2 className="text-2xl font-black text-center tracking-tighter uppercase mb-1">
                 {isRegisterMode ? 'Crear Cuenta' : 'Acceso Central'}
               </h2>
-              <p className="text-slate-400 text-center font-bold text-[9px] uppercase tracking-widest mb-6 sm:mb-8">Fincore AI - Treasury Intelligence</p>
+              <p className="text-slate-400 text-center font-bold text-[9px] uppercase tracking-widest mb-8">Fincore AI - Treasury Intelligence</p>
               <form onSubmit={isRegisterMode ? handleRegister : handleLogin} className="space-y-4">
                 {isRegisterMode && (
                   <div className="space-y-1">
@@ -238,7 +238,7 @@ const App: React.FC = () => {
                   {isLoggingIn ? 'Procesando...' : (isRegisterMode ? 'Solicitar Acceso' : 'Iniciar Sesión')}
                 </button>
               </form>
-              <div className="mt-6 sm:mt-8 pt-6 border-t border-slate-100 flex flex-col gap-4 text-center">
+              <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col gap-4 text-center">
                 <button onClick={() => { setIsRegisterMode(!isRegisterMode); setIsRecoverMode(false); }} className="text-[10px] font-black uppercase tracking-widest text-blue-500 hover:text-blue-700">
                   {isRegisterMode ? '¿Ya tienes cuenta? Ingresa aquí' : '¿No tienes cuenta? Regístrate'}
                 </button>
@@ -259,67 +259,72 @@ const App: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800 pb-20 md:pb-0">
       <header className="bg-slate-900 text-white p-4 sticky top-0 z-50 shadow-xl">
         <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3 sm:gap-4 cursor-pointer" onClick={() => setView(AppView.UPLOAD)}>
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-xl sm:rounded-2xl flex items-center justify-center font-black italic shadow-lg shadow-blue-500/30">F</div>
+          <div className="flex items-center gap-4 cursor-pointer" onClick={() => { setExtractedData(null); setView(AppView.UPLOAD); }}>
+            <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center font-black italic shadow-lg shadow-blue-500/30">F</div>
             <div className="flex flex-col">
-              <h1 className="text-lg sm:text-xl font-black tracking-tighter leading-none">FINCORE<span className="text-blue-400 text-[10px] ml-1 font-bold">AI</span></h1>
-              <span className="text-[7px] sm:text-[8px] font-black uppercase tracking-[0.2em] text-slate-500 mt-1 truncate max-w-[120px] sm:max-w-none">{user.name}</span>
+              <h1 className="text-xl font-black tracking-tighter leading-none">FINCORE<span className="text-blue-400 text-[10px] ml-1 font-bold">AI</span></h1>
+              <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500 mt-1">{user.name}</span>
             </div>
           </div>
           
-          {/* Desktop Navigation */}
           <nav className="hidden md:flex gap-1 bg-slate-800/50 p-1 rounded-2xl">
-            <button onClick={() => setView(AppView.UPLOAD)} className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.UPLOAD ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-400 hover:text-white'}`}>EXTRAER</button>
+            <button onClick={() => { setExtractedData(null); setView(AppView.UPLOAD); }} className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.UPLOAD ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-400 hover:text-white'}`}>EXTRAER</button>
             <button onClick={() => setView(AppView.TABLE)} className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.TABLE ? 'bg-slate-700 text-white shadow-xl' : 'text-slate-400 hover:text-white'}`}>AUDITORÍA</button>
             <button onClick={() => setView(AppView.BANCOS)} className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.BANCOS ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-400 hover:text-white'}`}>BANCOS</button>
             <button onClick={() => setView(AppView.DASHBOARD)} className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.DASHBOARD ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-400 hover:text-white'}`}>DASHBOARD</button>
             <button onClick={handleLogout} className="px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-400 hover:bg-red-500 hover:text-white transition-all ml-4">SALIR</button>
           </nav>
 
-          {/* Logout Mobile */}
           <button onClick={handleLogout} className="md:hidden p-2 text-slate-400 hover:text-red-400">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1-2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
           </button>
         </div>
       </header>
 
-      <main className="flex-grow max-w-7xl mx-auto w-full p-4 sm:p-6 md:p-12">
+      <main className="flex-grow w-full max-w-7xl mx-auto p-4 sm:p-6 md:p-8">
         {view === AppView.UPLOAD && (
-          <div className="max-w-4xl mx-auto">
+          <div className="w-full">
             {isProcessing || isSyncing ? (
-              <div className="bg-white p-12 sm:p-24 rounded-[32px] sm:rounded-[60px] shadow-2xl text-center border border-slate-100 animate-fadeIn">
-                <div className="w-16 h-16 sm:w-24 sm:h-24 border-[8px] sm:border-[12px] border-slate-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-8 sm:mb-10"></div>
-                <h2 className="text-xl sm:text-3xl font-black uppercase tracking-tighter">
-                  {isSyncing ? 'Guardando...' : 'Analizando...'}
+              <div className="max-w-4xl mx-auto bg-white p-24 rounded-[60px] shadow-2xl text-center border border-slate-100 animate-fadeIn">
+                <div className="w-24 h-24 border-[12px] border-slate-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-10"></div>
+                <h2 className="text-3xl font-black uppercase tracking-tighter">
+                  {isSyncing ? 'Guardando en la Nube...' : 'Analizando Factura...'}
                 </h2>
-                <p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-4">
-                  Procesando con IA de Google
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-4">
+                  Cotejando con el sistema financiero
                 </p>
               </div>
             ) : successMessage ? (
-              <div className="bg-white p-12 sm:p-20 rounded-[32px] sm:rounded-[60px] text-center shadow-2xl border border-slate-100 animate-fadeIn">
-                <div className="w-16 h-16 sm:w-24 sm:h-24 bg-green-50 text-green-600 rounded-[24px] sm:rounded-[32px] flex items-center justify-center mx-auto mb-8 sm:mb-10 text-3xl sm:text-5xl font-black shadow-inner">✓</div>
-                <p className="text-xl sm:text-2xl font-black mb-8 sm:mb-10 uppercase tracking-tighter">{successMessage}</p>
-                <button onClick={() => setSuccessMessage(null)} className="w-full sm:w-auto bg-slate-900 text-white px-10 py-5 rounded-[20px] sm:rounded-[24px] font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 shadow-xl transition-all">Nueva Extracción</button>
+              <div className="max-w-4xl mx-auto bg-white p-20 rounded-[60px] text-center shadow-2xl border border-slate-100 animate-fadeIn">
+                <div className="w-24 h-24 bg-green-50 text-green-600 rounded-[32px] flex items-center justify-center mx-auto mb-10 text-5xl font-black shadow-inner">✓</div>
+                <p className="text-2xl font-black mb-10 uppercase tracking-tighter">{successMessage}</p>
+                <button onClick={() => setSuccessMessage(null)} className="bg-slate-900 text-white px-10 py-5 rounded-[24px] font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 shadow-xl transition-all">Nueva Extracción</button>
               </div>
             ) : extractedData && preCategory ? (
-              <ClassificationForm data={extractedData} initialCategory={preCategory} onSave={onRecordSaved} onCancel={() => setExtractedData(null)} />
+              <ClassificationForm 
+                data={extractedData} 
+                initialCategory={preCategory} 
+                onSave={onRecordSaved} 
+                onCancel={() => setExtractedData(null)}
+                fileBase64={currentFileBase64 || undefined}
+                fileMime={currentFileMime || undefined}
+              />
             ) : preCategory ? (
-              <div className="bg-white border-4 border-dashed border-slate-200 rounded-[32px] sm:rounded-[60px] p-12 sm:p-24 text-center relative group hover:border-blue-500 transition-all cursor-pointer animate-fadeIn">
+              <div className="max-w-4xl mx-auto bg-white border-4 border-dashed border-slate-200 rounded-[60px] p-24 text-center relative group hover:border-blue-500 transition-all cursor-pointer animate-fadeIn">
                 <input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileUpload} accept="image/*,application/pdf" />
-                <p className="text-xl sm:text-3xl font-black uppercase tracking-tighter">Cargar Factura {preCategory}</p>
+                <p className="text-3xl font-black uppercase tracking-tighter">Cargar Factura {preCategory}</p>
                 <p className="mt-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">PDF o Imagen</p>
-                <button onClick={() => setPreCategory(null)} className="mt-8 sm:mt-12 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-800">← Cambiar Tipo</button>
+                <button onClick={() => setPreCategory(null)} className="mt-12 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-800">← Cambiar Tipo</button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-10 animate-fadeIn pt-4 sm:pt-10">
-                <button onClick={() => setPreCategory(TransactionCategory.INGRESO)} className="group bg-white p-10 sm:p-16 rounded-[32px] sm:rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-4 border-transparent hover:border-green-500">
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-green-50 text-green-600 rounded-2xl sm:rounded-[28px] flex items-center justify-center mb-8 sm:mb-10 text-3xl sm:text-4xl font-black group-hover:scale-110 transition-transform">+</div>
-                  <h3 className="text-2xl sm:text-4xl font-black tracking-tighter mb-2 sm:mb-4 uppercase">Ingresos</h3>
+              <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-10 animate-fadeIn pt-10">
+                <button onClick={() => setPreCategory(TransactionCategory.INGRESO)} className="group bg-white p-16 rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-4 border-transparent hover:border-green-500">
+                  <div className="w-20 h-20 bg-green-50 text-green-600 rounded-[28px] flex items-center justify-center mb-10 text-4xl font-black group-hover:scale-110 transition-transform">+</div>
+                  <h3 className="text-4xl font-black tracking-tighter mb-4 uppercase">Ingresos</h3>
                 </button>
-                <button onClick={() => setPreCategory(TransactionCategory.EGRESO)} className="group bg-white p-10 sm:p-16 rounded-[32px] sm:rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-4 border-transparent hover:border-red-500">
-                  <div className="w-16 h-16 sm:w-20 sm:h-20 bg-red-50 text-red-600 rounded-2xl sm:rounded-[28px] flex items-center justify-center mb-8 sm:mb-10 text-3xl sm:text-4xl font-black group-hover:scale-110 transition-transform">−</div>
-                  <h3 className="text-2xl sm:text-4xl font-black tracking-tighter mb-2 sm:mb-4 uppercase">Egresos</h3>
+                <button onClick={() => setPreCategory(TransactionCategory.EGRESO)} className="group bg-white p-16 rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-4 border-transparent hover:border-red-500">
+                  <div className="w-20 h-20 bg-red-50 text-red-600 rounded-[28px] flex items-center justify-center mb-10 text-4xl font-black group-hover:scale-110 transition-transform">−</div>
+                  <h3 className="text-4xl font-black tracking-tighter mb-4 uppercase">Egresos</h3>
                 </button>
               </div>
             )}
@@ -331,9 +336,8 @@ const App: React.FC = () => {
         {view === AppView.DASHBOARD && <Dashboard records={records} />}
       </main>
 
-      {/* Mobile Navigation Bar */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-slate-900 border-t border-slate-800 flex justify-around p-3 z-50">
-        <button onClick={() => setView(AppView.UPLOAD)} className={`flex flex-col items-center gap-1 ${view === AppView.UPLOAD ? 'text-blue-500' : 'text-slate-500'}`}>
+        <button onClick={() => { setExtractedData(null); setView(AppView.UPLOAD); }} className={`flex flex-col items-center gap-1 ${view === AppView.UPLOAD ? 'text-blue-500' : 'text-slate-500'}`}>
           <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           <span className="text-[8px] font-black uppercase">Extraer</span>
         </button>
