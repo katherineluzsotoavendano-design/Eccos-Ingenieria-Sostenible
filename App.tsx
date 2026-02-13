@@ -140,12 +140,12 @@ const App: React.FC = () => {
   if (!user) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl p-10 text-slate-800 animate-fadeIn">
-           <div className="flex justify-center mb-8">
-            <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black italic text-2xl shadow-xl shadow-blue-500/20">F</div>
+        <div className="max-w-md w-full bg-white rounded-[32px] md:rounded-[40px] shadow-2xl p-6 md:p-10 text-slate-800 animate-fadeIn">
+           <div className="flex justify-center mb-6 md:mb-8">
+            <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black italic text-xl md:text-2xl shadow-xl shadow-blue-500/20">F</div>
           </div>
-          <h2 className="text-2xl font-black text-center uppercase tracking-tighter mb-1">FINCORE AI</h2>
-          <p className="text-slate-400 text-center font-bold text-[9px] uppercase tracking-widest mb-8 italic">Control de Tesorería</p>
+          <h2 className="text-xl md:text-2xl font-black text-center uppercase tracking-tighter mb-1">FINCORE AI</h2>
+          <p className="text-slate-400 text-center font-bold text-[8px] md:text-[9px] uppercase tracking-widest mb-6 md:mb-8 italic">Control de Tesorería</p>
           
           {errorMessage && (
             <div className="mb-6 p-4 bg-red-50 border-2 border-red-100 rounded-2xl text-red-600 text-[10px] font-black uppercase text-center">
@@ -156,19 +156,19 @@ const App: React.FC = () => {
           <form onSubmit={handleAuth} className="space-y-4">
              <div className="space-y-1">
                <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Correo Autorizado</label>
-               <input type="email" required value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-4 font-bold text-sm outline-none transition-all" placeholder="usuario@empresa.com" />
+               <input type="email" required value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 md:py-4 font-bold text-sm outline-none transition-all" placeholder="usuario@empresa.com" />
              </div>
              <div className="space-y-1">
                <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Contraseña</label>
-               <input type="password" required value={authPass} onChange={e => setAuthPass(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-4 font-bold text-sm outline-none transition-all" placeholder="••••••••" />
+               <input type="password" required value={authPass} onChange={e => setAuthPass(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 md:py-4 font-bold text-sm outline-none transition-all" placeholder="••••••••" />
              </div>
              
-             <button disabled={isAuthLoading} type="submit" className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 shadow-xl transition-all active:scale-95">
-               {isAuthLoading ? 'Sincronizando con USERS...' : 'Iniciar Auditoría'}
+             <button disabled={isAuthLoading} type="submit" className="w-full bg-slate-900 text-white py-4 md:py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 shadow-xl transition-all active:scale-95">
+               {isAuthLoading ? 'Sincronizando...' : 'Iniciar Auditoría'}
              </button>
           </form>
-          <p className="mt-8 text-[8px] text-center text-slate-300 font-bold uppercase tracking-widest">
-            Acceso restringido: Solo personal validado en la hoja USERS de Google Sheets.
+          <p className="mt-8 text-[7px] md:text-[8px] text-center text-slate-300 font-bold uppercase tracking-widest">
+            Acceso restringido: Solo personal validado.
           </p>
         </div>
       </div>
@@ -177,18 +177,18 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
-      <header className="bg-slate-900 text-white p-4 sticky top-0 z-50 shadow-xl">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-4 cursor-pointer" onClick={resetFlow}>
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black italic">F</div>
-            <h1 className="text-lg font-black tracking-tighter">FINCORE<span className="text-blue-400">AI</span></h1>
+      <header className="bg-slate-900 text-white p-3 md:p-4 sticky top-0 z-50 shadow-xl">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-3 md:gap-4 cursor-pointer w-full md:w-auto justify-center md:justify-start" onClick={resetFlow}>
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black italic">F</div>
+            <h1 className="text-base md:text-lg font-black tracking-tighter">FINCORE<span className="text-blue-400">AI</span></h1>
           </div>
-          <nav className="hidden md:flex gap-1 bg-slate-800/50 p-1 rounded-2xl">
-            <button onClick={() => setView(AppView.UPLOAD)} className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.UPLOAD ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-400'}`}>AUDITORÍA</button>
-            <button onClick={() => setView(AppView.TABLE)} className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.TABLE ? 'bg-slate-700 text-white shadow-xl' : 'text-slate-400'}`}>REVISIÓN</button>
-            <button onClick={() => setView(AppView.BANCOS)} className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.BANCOS ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-400'}`}>BANCOS</button>
-            <button onClick={() => setView(AppView.DASHBOARD)} className={`px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.DASHBOARD ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-400'}`}>MÉTRICAS</button>
-            <button onClick={handleLogout} className="px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-400 ml-4">SALIR</button>
+          <nav className="flex gap-1 bg-slate-800/50 p-1 rounded-xl overflow-x-auto w-full md:w-auto custom-scrollbar no-scrollbar">
+            <button onClick={() => setView(AppView.UPLOAD)} className={`whitespace-nowrap flex-shrink-0 px-4 md:px-5 py-2 md:py-3 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.UPLOAD ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-400'}`}>AUDITORÍA</button>
+            <button onClick={() => setView(AppView.TABLE)} className={`whitespace-nowrap flex-shrink-0 px-4 md:px-5 py-2 md:py-3 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.TABLE ? 'bg-slate-700 text-white shadow-xl' : 'text-slate-400'}`}>REVISIÓN</button>
+            <button onClick={() => setView(AppView.BANCOS)} className={`whitespace-nowrap flex-shrink-0 px-4 md:px-5 py-2 md:py-3 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.BANCOS ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-400'}`}>BANCOS</button>
+            <button onClick={() => setView(AppView.DASHBOARD)} className={`whitespace-nowrap flex-shrink-0 px-4 md:px-5 py-2 md:py-3 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.DASHBOARD ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-400'}`}>MÉTRICAS</button>
+            <button onClick={handleLogout} className="whitespace-nowrap flex-shrink-0 px-4 md:px-5 py-2 md:py-3 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest text-red-400">SALIR</button>
           </nav>
         </div>
       </header>
@@ -197,38 +197,38 @@ const App: React.FC = () => {
         {view === AppView.UPLOAD && (
           <div className="w-full">
             {isProcessing || isSyncing ? (
-              <div className="max-w-4xl mx-auto bg-white p-24 rounded-[60px] shadow-2xl text-center animate-fadeIn">
-                <div className="w-20 h-20 border-[8px] border-slate-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-10"></div>
-                <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900">
-                  {isSyncing ? 'Sincronizando con Sheets...' : 'IA Analizando Documento...'}
+              <div className="max-w-4xl mx-auto bg-white p-12 md:p-24 rounded-[40px] md:rounded-[60px] shadow-2xl text-center animate-fadeIn">
+                <div className="w-16 h-16 md:w-20 md:h-20 border-[6px] md:border-[8px] border-slate-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-8 md:mb-10"></div>
+                <h2 className="text-xl md:text-2xl font-black uppercase tracking-tighter text-slate-900">
+                  {isSyncing ? 'Sincronizando...' : 'Analizando Documento...'}
                 </h2>
               </div>
             ) : successMessage ? (
-              <div className="max-w-4xl mx-auto bg-white p-20 rounded-[60px] text-center shadow-2xl border border-slate-100 animate-fadeIn">
-                <div className="w-20 h-20 bg-green-50 text-green-600 rounded-[32px] flex items-center justify-center mx-auto mb-10 text-4xl font-black shadow-inner">✓</div>
-                <p className="text-xl font-black mb-10 uppercase tracking-tighter text-slate-900">{successMessage}</p>
-                <button onClick={resetFlow} className="bg-slate-900 text-white px-10 py-5 rounded-[24px] font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 shadow-xl transition-all">Siguiente Operación</button>
+              <div className="max-w-4xl mx-auto bg-white p-10 md:p-20 rounded-[40px] md:rounded-[60px] text-center shadow-2xl border border-slate-100 animate-fadeIn">
+                <div className="w-16 h-16 md:w-20 md:h-20 bg-green-50 text-green-600 rounded-[24px] md:rounded-[32px] flex items-center justify-center mx-auto mb-8 md:mb-10 text-3xl md:text-4xl font-black shadow-inner">✓</div>
+                <p className="text-lg md:text-xl font-black mb-8 md:mb-10 uppercase tracking-tighter text-slate-900">{successMessage}</p>
+                <button onClick={resetFlow} className="w-full md:w-auto bg-slate-900 text-white px-10 py-5 rounded-2xl md:rounded-[24px] font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 shadow-xl transition-all">Siguiente Operación</button>
               </div>
             ) : extractedData && preCategory ? (
               <ClassificationForm data={extractedData} initialCategory={preCategory} onSave={onRecordSaved} onCancel={resetFlow} previewUrl={previewUrl || undefined} fileMime={currentFileMime || undefined} />
             ) : preCategory ? (
-              <div className="max-w-4xl mx-auto bg-white border-4 border-dashed border-slate-200 rounded-[60px] p-24 text-center relative group hover:border-blue-500 cursor-pointer animate-fadeIn transition-all">
+              <div className="max-w-4xl mx-auto bg-white border-4 border-dashed border-slate-200 rounded-[40px] md:rounded-[60px] p-12 md:p-24 text-center relative group hover:border-blue-500 cursor-pointer animate-fadeIn transition-all">
                 <input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileUpload} accept="image/*,application/pdf" />
-                <p className="text-2xl font-black uppercase tracking-tighter text-slate-900">Subir {preCategory === TransactionCategory.INGRESO ? 'Venta' : 'Gasto'}</p>
-                <p className="text-slate-400 font-bold text-[10px] mt-4 uppercase tracking-widest">Formatos PDF o Imágenes</p>
-                <button onClick={resetFlow} className="mt-12 text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-8 py-3 rounded-full hover:bg-slate-200 transition-colors">← REGRESAR</button>
+                <p className="text-xl md:text-2xl font-black uppercase tracking-tighter text-slate-900">Subir {preCategory === TransactionCategory.INGRESO ? 'Venta' : 'Gasto'}</p>
+                <p className="text-slate-400 font-bold text-[9px] md:text-[10px] mt-4 uppercase tracking-widest">Formatos PDF o Imágenes</p>
+                <button onClick={resetFlow} className="mt-8 md:mt-12 text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-6 md:px-8 py-3 rounded-full hover:bg-slate-200 transition-colors">← REGRESAR</button>
               </div>
             ) : (
-              <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-10 animate-fadeIn pt-10">
-                <button onClick={() => setPreCategory(TransactionCategory.INGRESO)} className="group bg-white p-16 rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-4 border-transparent hover:border-green-500">
-                  <div className="w-16 h-16 bg-green-50 text-green-600 rounded-[24px] flex items-center justify-center mb-10 text-3xl font-black shadow-inner">+</div >
-                  <h3 className="text-3xl font-black tracking-tighter mb-4 uppercase text-slate-900">Ingresos</h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Ventas y Facturación</p>
+              <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-6 md:gap-10 animate-fadeIn pt-4 md:pt-10">
+                <button onClick={() => setPreCategory(TransactionCategory.INGRESO)} className="group bg-white p-10 md:p-16 rounded-[40px] md:rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-4 border-transparent hover:border-green-500">
+                  <div className="w-12 h-12 md:w-16 md:h-16 bg-green-50 text-green-600 rounded-[20px] md:rounded-[24px] flex items-center justify-center mb-8 md:mb-10 text-2xl md:text-3xl font-black shadow-inner">+</div >
+                  <h3 className="text-2xl md:text-3xl font-black tracking-tighter mb-4 uppercase text-slate-900">Ingresos</h3>
+                  <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Ventas y Facturación</p>
                 </button>
-                <button onClick={() => setPreCategory(TransactionCategory.EGRESO)} className="group bg-white p-16 rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-4 border-transparent hover:border-red-500">
-                  <div className="w-16 h-16 bg-red-50 text-red-600 rounded-[24px] flex items-center justify-center mb-10 text-3xl font-black shadow-inner">−</div >
-                  <h3 className="text-3xl font-black tracking-tighter mb-4 uppercase text-slate-900">Egresos</h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Gastos y Proveedores</p>
+                <button onClick={() => setPreCategory(TransactionCategory.EGRESO)} className="group bg-white p-10 md:p-16 rounded-[40px] md:rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-4 border-transparent hover:border-red-500">
+                  <div className="w-12 h-12 md:w-16 md:h-16 bg-red-50 text-red-600 rounded-[20px] md:rounded-[24px] flex items-center justify-center mb-8 md:mb-10 text-2xl md:text-3xl font-black shadow-inner">−</div >
+                  <h3 className="text-2xl md:text-3xl font-black tracking-tighter mb-4 uppercase text-slate-900">Egresos</h3>
+                  <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Gastos y Proveedores</p>
                 </button>
               </div>
             )}
