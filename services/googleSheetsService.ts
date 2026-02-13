@@ -1,38 +1,21 @@
 
-import { FinancialRecord, ApiResponse, User, UserRole } from "../types";
+import { FinancialRecord, ApiResponse, User, TransactionCategory } from "../types";
 
-/**
- * URL de la Aplicación Web de Google Apps Script v3.9+.
- * Nueva URL proporcionada: AKfycbxBybfW4zURfmb9aQxxJSKUMqMZT0W-09pnZihuuePPShGzoXDiexKgEBypQDoSC_vvpw
- */
-const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbxBybfW4zURfmb9aQxxJSKUMqMZT0W-09pnZihuuePPShGzoXDiexKgEBypQDoSC_vvpw/exec';
+const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwrn2akFehr4jNyBKooVx1Nl37DCE9xSe8EqkgN_SL7DLkcUVTHcFArcAPqnpMcthC-Xw/exec';
 
 const handleGasResponse = (text: string) => {
-  if (text.includes("<!DOCTYPE html>")) {
-    return { 
-      success: false, 
-      error: "⚠️ EL SERVIDOR DE GOOGLE ESTÁ OCUPADO: Reintenta en unos segundos." 
-    };
-  }
+  if (!text || text.trim() === "") return { success: false, error: "El servidor de Google no envió respuesta." };
   try {
-    return JSON.parse(text);
+    const json = JSON.parse(text);
+    return json;
   } catch (e) {
-    return { success: false, error: "Error de respuesta del servidor central." };
-  }
-};
-
-export const loginUser = async (email: string, password: string): Promise<ApiResponse<User>> => {
-  try {
-    const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'login', email, password }),
-    });
-    const text = await response.text();
-    const result = handleGasResponse(text);
-    return result.success ? { success: true, data: result.user } : { success: false, error: result.error };
-  } catch (e) {
-    return { success: false, error: "Fallo de conexión con el servidor de Google." };
+    if (text.includes("<!DOCTYPE html>") || text.includes("<html")) {
+      return { 
+        success: false, 
+        error: "Error de Configuración: El Script no está publicado correctamente como 'Cualquier Persona' (Anyone)." 
+      };
+    }
+    return { success: false, error: "Error al interpretar la respuesta del servidor de Google." };
   }
 };
 
@@ -42,16 +25,45 @@ export const saveToGoogleSheets = async (
   fileMimeType?: string
 ): Promise<ApiResponse<{ driveUrl?: string }>> => {
   try {
+    const isIncome = record.category === TransactionCategory.INGRESO;
+    const targetSheet = isIncome ? 'INGRESOS' : 'EGRESOS';
+    
+    // Construcción de data diferenciada
+    const baseData: any = {
+      FECHA: record.date || new Date().toISOString().split('T')[0],
+      ENTIDAD: record.vendor,
+      RUC: record.taxId,
+      N_FACTURA: record.invoiceNumber,
+      DESCRIPCION: record.description || "Registro Auditoría AI",
+      MONTO: record.amount,
+      MONEDA: record.currency,
+      MODALIDAD: record.paymentMode,
+      FLUJO_CAJA: record.flowType,
+      DETRACCION: record.detractionAmount || 0,
+      LINEA: record.serviceLine,
+      MOVIMIENTO: record.incomeType || record.costType || "N/A",
+      ESTADO: record.operationState,
+      RUTA_DRIVE: record.folderPath ? record.folderPath.join(' / ') : "SIN_RUTA"
+    };
+
+    // Solo agregar datos de pago si es EGRESO
+    if (!isIncome) {
+      baseData.CAJA = record.depositedTo || "PAGO DIRECTO";
+      baseData.MONTO_PAGADO = record.voucherAmount || 0;
+    }
+
     const payload = { 
-      ...record, 
       action: 'save', 
-      fileBase64, 
-      fileMimeType,
-      folderPath: record.folderPath 
+      targetSheet: targetSheet,
+      fileBase64: fileBase64 || "", 
+      fileMimeType: fileMimeType || "application/pdf",
+      voucherFileBase64: record.voucherFileBase64 || "",
+      data: baseData
     };
     
     const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
       method: 'POST',
+      mode: 'cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload),
     });
@@ -61,38 +73,40 @@ export const saveToGoogleSheets = async (
     
     return result.success 
       ? { success: true, data: { driveUrl: result.driveUrl } } 
-      : { success: false, error: result.error };
-  } catch (e: any) {
-    return { success: false, error: "Error de sincronización con la nube." };
+      : { success: false, error: result.error || "Error al sincronizar con Sheets." };
+  } catch (e) {
+    console.error("Error de comunicación:", e);
+    return { success: false, error: "No se pudo conectar con el servicio de Google Sheets." };
   }
 };
 
-export const registerUser = async (name: string, email: string, password: string, role: UserRole): Promise<ApiResponse<void>> => {
+export const loginUser = async (email: string, password: string): Promise<ApiResponse<User>> => {
   try {
-    const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'register', name, email, password, role }),
-    });
-    const text = await response.text();
-    const result = handleGasResponse(text);
-    return result.success ? { success: true } : { success: false, error: result.error };
-  } catch (e) {
-    return { success: false, error: "Error de registro." };
-  }
-};
+    const payload = { 
+      action: 'login', 
+      email: email.trim().toLowerCase(), 
+      password: password.toString().trim() 
+    };
 
-export const recoverPassword = async (email: string): Promise<ApiResponse<string>> => {
-  try {
     const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
       method: 'POST',
+      mode: 'cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'recover', email }),
+      body: JSON.stringify(payload),
     });
+    
     const text = await response.text();
     const result = handleGasResponse(text);
-    return result.success ? { success: true, data: result.message } : { success: false, error: result.error };
+    
+    if (result.success && result.user) {
+      return { success: true, data: result.user };
+    }
+
+    return { 
+      success: false, 
+      error: result.error || "Acceso denegado. Revisa tus credenciales en la hoja 'USERS'." 
+    };
   } catch (e) {
-    return { success: false, error: "Error de recuperación." };
+    return { success: false, error: "Error de conexión: No se pudo validar el acceso." };
   }
 };

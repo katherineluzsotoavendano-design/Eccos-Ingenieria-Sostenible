@@ -1,155 +1,119 @@
 
 import React, { useState } from 'react';
-import { FinancialRecord, OperationState, TransactionCategory, PaymentMode } from '../types';
+import { FinancialRecord, OperationState, TransactionCategory, UserRole } from '../types';
 
 interface Props {
   records: FinancialRecord[];
+  userRole: UserRole;
   onUpdateRecord: (id: string, updates: Partial<FinancialRecord>) => void;
 }
 
-const ManagementTable: React.FC<Props> = ({ records, onUpdateRecord }) => {
+const ManagementTable: React.FC<Props> = ({ records, userRole, onUpdateRecord }) => {
   const [filter, setFilter] = useState('');
+  const isManager = userRole === 'Gerente General';
   
-  const getMonthName = (dateStr: string) => {
-    const months = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
-    const parts = dateStr.split('-');
-    if (parts.length < 2) return "OTROS";
-    const monthIndex = parseInt(parts[1]) - 1;
-    return months[monthIndex] || "OTROS";
-  };
-
   const filtered = records.filter(r => {
-    const matchesText = r.vendor.toLowerCase().includes(filter.toLowerCase()) || 
-                       r.invoiceNumber.toLowerCase().includes(filter.toLowerCase());
-    return matchesText;
+    return r.vendor.toLowerCase().includes(filter.toLowerCase()) || 
+           r.invoiceNumber.toLowerCase().includes(filter.toLowerCase());
   });
 
-  const handleTogglePaid = (record: FinancialRecord) => {
-    if (record.isPaid) {
-      if (confirm("¿Seguro que desea revertir el estado de pago?")) {
-        onUpdateRecord(record.id, { isPaid: false, paidDate: undefined, operationState: OperationState.PENDIENTE });
-      }
-    } else {
-      const pDate = prompt("Confirmación de Abono: Ingrese la fecha (YYYY-MM-DD):", new Date().toISOString().split('T')[0]);
-      if (pDate) {
-        onUpdateRecord(record.id, { isPaid: true, paidDate: pDate, operationState: OperationState.CONCILIADO });
-      }
+  const handleApprove = (record: FinancialRecord) => {
+    if (confirm(`¿Aprobar documento ${record.invoiceNumber} para pago?`)) {
+      onUpdateRecord(record.id, { 
+        operationState: OperationState.APROBADO,
+        approvedBy: 'Gerencia' 
+      });
+    }
+  };
+
+  const handleReject = (record: FinancialRecord) => {
+    const reason = prompt("Indique el motivo del rechazo:");
+    if (reason) {
+      onUpdateRecord(record.id, { 
+        operationState: OperationState.RECHAZADO,
+        rejectionReason: reason
+      });
+    }
+  };
+
+  const getStateStyle = (state: OperationState) => {
+    switch (state) {
+      case OperationState.APROBADO: return 'bg-green-100 text-green-700 border-green-200';
+      case OperationState.RECHAZADO: return 'bg-red-100 text-red-700 border-red-200';
+      case OperationState.EN_REVISION: return 'bg-blue-100 text-blue-700 border-blue-200 animate-pulse';
+      case OperationState.CONCILIADO: return 'bg-slate-900 text-white border-slate-900';
+      default: return 'bg-slate-100 text-slate-500 border-slate-200';
     }
   };
 
   return (
-    <div className="space-y-6 sm:space-y-8 animate-fadeIn">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div className="space-y-8 animate-fadeIn">
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
-          <h2 className="text-2xl sm:text-4xl font-black tracking-tighter uppercase text-slate-900 leading-none">Auditoría Digital</h2>
-          <p className="text-slate-400 font-bold text-[10px] sm:text-xs uppercase tracking-widest mt-2">Documentos organizados</p>
+          <h2 className="text-3xl font-black tracking-tighter uppercase text-slate-900">Módulo de Aprobaciones</h2>
+          <p className="text-slate-400 font-bold text-[10px] uppercase tracking-widest mt-1">Control de Calidad Fiscal</p>
         </div>
-        <div className="w-full md:w-auto">
-          <input 
-            type="text" 
-            placeholder="Buscar entidad o factura..."
-            value={filter}
-            onChange={e => setFilter(e.target.value)}
-            className="w-full md:w-64 bg-white border-2 border-slate-100 focus:border-blue-500 rounded-2xl px-6 py-3 outline-none font-bold text-xs shadow-sm"
-          />
-        </div>
+        <input 
+          type="text" 
+          placeholder="Buscar factura o entidad..."
+          value={filter}
+          onChange={e => setFilter(e.target.value)}
+          className="w-full md:w-80 bg-white border-2 border-slate-100 focus:border-blue-500 rounded-2xl px-6 py-3 outline-none font-bold text-xs"
+        />
       </div>
 
-      {/* Desktop Table */}
-      <div className="hidden md:block bg-white rounded-[40px] shadow-sm border border-slate-100 overflow-hidden">
+      <div className="bg-white rounded-[40px] shadow-sm border border-slate-100 overflow-hidden">
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
-                <th className="px-8 py-6 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Emisión</th>
-                <th className="px-8 py-6 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Documento</th>
-                <th className="px-8 py-6 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Entidad / Factura</th>
-                <th className="px-8 py-6 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 text-right">Monto</th>
-                <th className="px-8 py-6 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 text-center">Estado</th>
+                <th className="px-8 py-6 text-[9px] font-black uppercase tracking-widest text-slate-400">Entidad</th>
+                <th className="px-8 py-6 text-[9px] font-black uppercase tracking-widest text-slate-400">Carpeta Drive</th>
+                <th className="px-8 py-6 text-[9px] font-black uppercase tracking-widest text-slate-400">Monto</th>
+                <th className="px-8 py-6 text-[9px] font-black uppercase tracking-widest text-slate-400">Estado</th>
+                <th className="px-8 py-6 text-[9px] font-black uppercase tracking-widest text-slate-400 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {filtered.map(record => (
-                <tr key={record.id} className="hover:bg-slate-50/30 transition-colors">
-                  <td className="px-8 py-6 font-bold text-slate-800 text-sm">{record.date}</td>
-                  <td className="px-8 py-6">
-                    {record.driveUrl ? (
-                      <a 
-                        href={record.driveUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="px-3 py-1 bg-blue-500 text-white rounded-lg text-[10px] font-black uppercase tracking-widest border border-blue-600 hover:bg-blue-700 transition-all shadow-sm block text-center"
-                      >
-                        Ver PDF 📄
-                      </a>
-                    ) : (
-                      <span className="px-3 py-1 bg-slate-100 text-slate-400 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-200 block text-center">
-                        📂 {getMonthName(record.date)}
-                      </span>
-                    )}
-                  </td>
+                <tr key={record.id} className="hover:bg-slate-50/30 transition-all">
                   <td className="px-8 py-6">
                     <div className="flex flex-col">
                       <span className="font-black text-slate-800 text-xs uppercase">{record.vendor}</span>
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-1">{record.invoiceNumber}</span>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase mt-1">{record.invoiceNumber}</span>
                     </div>
                   </td>
-                  <td className="px-8 py-6 text-right font-black text-sm">
+                  <td className="px-8 py-6">
+                    <span className="text-[10px] font-black bg-slate-100 text-slate-600 px-3 py-1 rounded-lg uppercase">
+                      📂 {record.folderPath ? record.folderPath[0] : 'SIN RUTA'}
+                    </span>
+                  </td>
+                  <td className="px-8 py-6 font-black text-sm">
                     {record.amount.toLocaleString()} <span className="text-[9px] opacity-40">{record.currency}</span>
                   </td>
-                  <td className="px-8 py-6 text-center">
-                    <button 
-                      onClick={() => handleTogglePaid(record)}
-                      className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${record.isPaid ? 'bg-green-100 text-green-600' : 'bg-slate-900 text-white'}`}
-                    >
-                      {record.isPaid ? 'Conciliado' : 'Pendiente'}
-                    </button>
+                  <td className="px-8 py-6">
+                    <div className={`px-4 py-1.5 rounded-xl text-[8px] font-black uppercase border inline-block ${getStateStyle(record.operationState)}`}>
+                      {record.operationState}
+                    </div>
+                  </td>
+                  <td className="px-8 py-6 text-right space-x-2">
+                    {record.driveUrl && (
+                      <a href={record.driveUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800 p-2 inline-block">
+                        📄
+                      </a>
+                    )}
+                    {isManager && record.operationState === OperationState.EN_REVISION && (
+                      <>
+                        <button onClick={() => handleApprove(record)} className="bg-green-600 text-white p-2 rounded-lg text-[9px] font-black hover:bg-green-700">APROBAR</button>
+                        <button onClick={() => handleReject(record)} className="bg-red-600 text-white p-2 rounded-lg text-[9px] font-black hover:bg-red-700">RECHAZAR</button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* Mobile Cards View */}
-      <div className="md:hidden grid grid-cols-1 gap-4 pb-10">
-        {filtered.map(record => (
-          <div key={record.id} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col gap-4">
-            <div className="flex justify-between items-start">
-              <div className="flex flex-col">
-                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{record.date}</span>
-                <span className="text-sm font-black text-slate-900 uppercase leading-tight mt-1">{record.vendor}</span>
-                <span className="text-[10px] font-bold text-slate-400 uppercase mt-0.5">{record.invoiceNumber}</span>
-              </div>
-              <div className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase ${record.category === TransactionCategory.INGRESO ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                {record.category}
-              </div>
-            </div>
-            
-            <div className="flex justify-between items-end border-t border-slate-50 pt-4">
-              <div className="flex flex-col">
-                <span className="text-[8px] font-black text-slate-400 uppercase">Monto Total</span>
-                <span className="text-xl font-black text-slate-900">
-                  {record.amount.toLocaleString()} <span className="text-xs font-bold opacity-30">{record.currency}</span>
-                </span>
-              </div>
-              <div className="flex gap-2">
-                {record.driveUrl && (
-                  <a href={record.driveUrl} target="_blank" rel="noopener noreferrer" className="p-3 bg-slate-100 text-slate-600 rounded-xl">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                  </a>
-                )}
-                <button 
-                  onClick={() => handleTogglePaid(record)}
-                  className={`px-5 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest ${record.isPaid ? 'bg-green-100 text-green-600' : 'bg-slate-900 text-white'}`}
-                >
-                  {record.isPaid ? 'Listo' : 'Conciliar'}
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );

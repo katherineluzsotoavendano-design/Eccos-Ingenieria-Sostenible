@@ -6,8 +6,11 @@ export enum TransactionCategory {
 
 export enum OperationState {
   PENDIENTE = 'PENDIENTE',
+  EN_REVISION = 'EN_REVISION',
+  APROBADO = 'APROBADO',
+  RECHAZADO = 'RECHAZADO',
   CONCILIADO = 'CONCILIADO',
-  OBSERVADO = 'OBSERVADO'
+  PAGADO = 'PAGADO'
 }
 
 export enum PaymentMode {
@@ -29,10 +32,12 @@ export interface User {
   role: UserRole;
 }
 
+export type DriveFolder = 'VENTAS' | 'COMPRAS' | 'SERVICIOS';
+
 export type IncomeType = 'VENTAS' | 'PRÉSTAMOS' | 'CAMBIO DE MONEDA' | 'INGRESOS FINANCIEROS';
 export type ServiceLine = 'Capacitaciones Ágiles/Presenciales' | 'Consultoría Ambiental' | 'Consultoría SIG' | 'Auditoría Tradicional' | 'Auditorías 360' | 'ECCOS GASTO';
 export type CostType = 'FIJO' | 'VARIABLE';
-export type DepositedTo = 'NATHALIA' | 'JOSÉ' | 'PAGO DIRECTO';
+export type DepositedTo = 'NATHALIA' | 'JOSÉ' | 'PAGO DIRECTO' | 'OTROS';
 
 export interface ExtractedData {
   vendor: string; 
@@ -41,18 +46,18 @@ export interface ExtractedData {
   amount: number;
   currency: string;
   invoiceNumber: string;
-  categorySuggest: string;
-  detractionAmount?: number;
-  paymentMode?: PaymentMode;
-  creditDate?: string;
-  flowType?: FlowType;
+  description: string;
+  detractionAmount: number;
+  paymentMode: PaymentMode;
+  creditDate?: string; 
+  flowType: FlowType;
   incomeType?: IncomeType;
-  serviceLine?: ServiceLine;
+  serviceLine: ServiceLine;
   costType?: CostType;
   depositedTo?: DepositedTo;
-  voucherAmount?: number;
-  voucherDate?: string;
-  paidDate?: string;
+  voucherAmount?: number; 
+  voucherFileBase64?: string;
+  targetFolder?: DriveFolder;
 }
 
 export interface FinancialRecord extends ExtractedData {
@@ -62,7 +67,9 @@ export interface FinancialRecord extends ExtractedData {
   isPaid: boolean;
   createdAt: string;
   driveUrl?: string;
-  folderPath?: string[]; // Ejemplo: ["2026", "ENERO", "COMPRAS", "SERVICIOS"]
+  folderPath?: string[];
+  approvedBy?: string;
+  rejectionReason?: string;
 }
 
 export interface BankMovement {
