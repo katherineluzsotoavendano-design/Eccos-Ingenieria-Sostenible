@@ -22,12 +22,12 @@ export const processDocument = async (base64: string, mimeType: string, category
   
   const isIncome = category === TransactionCategory.INGRESO;
   
-  // Prompt ultra-específico según requerimiento
+  // Prompt con lógica de moneda PEN por defecto
   const systemInstruction = isIncome 
-    ? `ACTÚA COMO AUDITOR FISCAL EXPERTO. El documento es un INGRESO.
+    ? `ACTÚA COMO AUDITOR FISCAL EXPERTO. El documento es un INGRESO (Venta).
        IMPORTANTE: Extrae los datos del DESTINATARIO/CLIENTE/ADQUIRIENTE (quien recibe el servicio). 
        NO extraigas los datos del emisor de la parte superior. Busca etiquetas como "Señor(es)", "Cliente", "Adquiriente".`
-    : `ACTÚA COMO AUDITOR FISCAL EXPERTO. El documento es un EGRESO/GASTO.
+    : `ACTÚA COMO AUDITOR FISCAL EXPERTO. El documento es un EGRESO (Gasto).
        IMPORTANTE: Extrae los datos del EMISOR/PROVEEDOR (quien vende/emite la factura). 
        Busca etiquetas como "Razón Social", "Empresa", "Emisor".`;
 
@@ -38,15 +38,16 @@ export const processDocument = async (base64: string, mimeType: string, category
         { inlineData: { mimeType, data: base64 } },
         { 
           text: `${systemInstruction} 
-          Extrae estrictamente en JSON los siguientes campos:
-          - vendor (Razón Social según la instrucción anterior)
-          - taxId (RUC o ID Fiscal de dicha Razón Social)
-          - date (Fecha de emisión en formato YYYY-MM-DD)
-          - amount (Monto Total final con decimales)
+          REGLA DE MONEDA: Por defecto la moneda es PEN (Soles). Solo si detectas explícitamente símbolos de dólares ($) o USD, asigna USD.
+          Extrae estrictamente en JSON:
+          - vendor (Razón Social según instrucción anterior)
+          - taxId (RUC o ID Fiscal)
+          - date (Fecha de emisión YYYY-MM-DD)
+          - amount (Monto Total final)
           - currency (PEN o USD)
-          - invoiceNumber (Serie y número correlativo)
-          - description (Resumen breve de los productos/servicios)
-          - detractionAmount (Monto de detracción mencionado, si no hay pon 0)
+          - invoiceNumber (Serie y número)
+          - description (Resumen breve)
+          - detractionAmount (Monto de detracción o 0)
           - paymentMode (CONTADO o CREDITO)` 
         }
       ]
@@ -73,7 +74,6 @@ export const processDocument = async (base64: string, mimeType: string, category
 
   const parsed = JSON.parse(cleanJsonResponse(response.text));
   
-  // Normalización
   const normPaymentMode = parsed.paymentMode?.toUpperCase().includes('CREDIT') 
     ? PaymentMode.CREDITO 
     : PaymentMode.CONTADO;
@@ -96,7 +96,7 @@ export const processVoucherIA = async (base64: string, mimeType: string): Promis
     contents: {
       parts: [
         { inlineData: { mimeType, data: base64 } },
-        { text: "Extrae la FECHA (YYYY-MM-DD) y el MONTO del voucher de pago. Devuelve JSON con 'date' y 'amount'." }
+        { text: "Extrae FECHA (YYYY-MM-DD) y MONTO del voucher. JSON: 'date' y 'amount'." }
       ]
     },
     config: {
