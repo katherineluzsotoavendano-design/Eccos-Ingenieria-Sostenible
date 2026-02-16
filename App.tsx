@@ -54,7 +54,6 @@ const App: React.FC = () => {
   const [records, setRecords] = useState<FinancialRecord[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [lastSavedRecord, setLastSavedRecord] = useState<FinancialRecord | null>(null);
   const [hasApiKey, setHasApiKey] = useState<boolean>(true);
   
   const [currentFileBase64, setCurrentFileBase64] = useState<string | null>(null);
@@ -65,7 +64,7 @@ const App: React.FC = () => {
   const [authPass, setAuthPass] = useState('');
 
   useEffect(() => {
-    // Verificación de API KEY discreta
+    // Verificación interna silenciosa
     const key = process.env.API_KEY;
     if (!key || key === "" || key === "undefined" || key === "null") {
       setHasApiKey(false);
@@ -108,7 +107,7 @@ const App: React.FC = () => {
     e.preventDefault();
     setIsAuthLoading(true);
     setErrorMessage(null);
-    setAuthStatus('Verificando...');
+    setAuthStatus('Verificando acceso...');
     
     try {
       const res = await loginUser(authEmail, authPass);
@@ -117,10 +116,10 @@ const App: React.FC = () => {
         localStorage.setItem('fincore_session', JSON.stringify(res.data));
         loadInitialData();
       } else {
-        setErrorMessage(res.error || "Credenciales inválidas.");
+        setErrorMessage(res.error || "Acceso denegado.");
       }
     } catch (err) {
-      setErrorMessage("Error de conexión al servidor.");
+      setErrorMessage("Error de conexión con el servidor.");
     } finally {
       setIsAuthLoading(false);
       setAuthStatus('');
@@ -146,11 +145,9 @@ const App: React.FC = () => {
           setCurrentFileBase64(base64Content);
           const result = await processDocument(base64Content, file.type, preCategory);
           setExtractedData(result);
-        } else {
-          throw new Error("No se pudo leer el archivo.");
         }
       } catch (err: any) {
-        setErrorMessage(err.message || "Error analizando documento.");
+        setErrorMessage(err.message || "Error al procesar el documento con IA.");
       } finally {
         setIsProcessing(false);
       }
@@ -166,7 +163,6 @@ const App: React.FC = () => {
       const recordWithUrl = { ...record, driveUrl: cloudRes.success ? cloudRes.data?.driveUrl : undefined };
       await saveToExternalDatabase(recordWithUrl);
       setSuccessMessage("✅ REGISTRO ÉXITOSO");
-      setLastSavedRecord(recordWithUrl);
       setRecords([recordWithUrl, ...records]);
     } catch (err) {
       setErrorMessage("Error al sincronizar datos.");
@@ -174,14 +170,6 @@ const App: React.FC = () => {
       setIsSyncing(false);
       setExtractedData(null);
       setPreCategory(null);
-    }
-  };
-
-  const handleDeleteRecord = async (record: FinancialRecord) => {
-    if (confirm(`¿Eliminar ${record.invoiceNumber}?`)) {
-      await deleteRecordFromExternalDatabase(record.id);
-      await deleteFromGoogleSheets(record.invoiceNumber, record.category);
-      setRecords(records.filter(r => r.id !== record.id));
     }
   };
 
@@ -197,8 +185,8 @@ const App: React.FC = () => {
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-[#263238] flex flex-col items-center justify-center p-4">
-        <div className="w-12 h-12 border-4 border-slate-700 border-t-[#a6ce39] rounded-full animate-spin mb-6"></div>
-        <p className="text-[#a6ce39] font-black text-[10px] uppercase tracking-[0.4em]">Iniciando Auditoría AI...</p>
+        <div className="w-10 h-10 border-4 border-slate-700 border-t-[#a6ce39] rounded-full animate-spin mb-4"></div>
+        <p className="text-[#a6ce39] font-black text-[9px] uppercase tracking-[0.4em]">Iniciando plataforma...</p>
       </div>
     );
   }
@@ -208,7 +196,7 @@ const App: React.FC = () => {
       <div className="min-h-screen bg-[#263238] flex items-center justify-center p-6">
         <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl p-10 md:p-14 animate-fadeIn border-t-8 border-[#00838f]">
           <div className="flex flex-col items-center mb-10">
-            <div className="relative w-16 h-16 mb-6">
+            <div className="relative w-16 h-16 mb-4">
               <div className="absolute inset-0 rounded-full border-4 border-[#00838f] border-r-transparent border-b-transparent rotate-45"></div>
               <div className="absolute inset-0 rounded-full border-4 border-[#a6ce39] border-l-transparent border-t-transparent -rotate-45"></div>
               <div className="absolute inset-0 flex items-center justify-center">
@@ -222,19 +210,19 @@ const App: React.FC = () => {
           </div>
           
           {errorMessage && (
-            <div className="mb-6 p-4 bg-red-50 border-2 border-red-100 rounded-2xl text-red-600 text-[10px] font-black uppercase text-center animate-bounce">
+            <div className="mb-6 p-4 bg-red-50 border-2 border-red-100 rounded-2xl text-red-600 text-[10px] font-black uppercase text-center">
               {errorMessage}
             </div>
           )}
 
-          <form onSubmit={handleAuth} className="space-y-5">
+          <form onSubmit={handleAuth} className="space-y-4">
              <div className="space-y-1">
-               <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Usuario</label>
-               <input type="email" required value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-[#00838f] rounded-2xl px-6 py-4 font-bold text-sm outline-none transition-all shadow-sm" placeholder="usuario@eccos.pe" />
+               <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Email Corporativo</label>
+               <input type="email" required value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-[#00838f] rounded-2xl px-6 py-4 font-bold text-sm outline-none transition-all" placeholder="usuario@eccos.pe" />
              </div>
              <div className="space-y-1">
-               <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Contraseña</label>
-               <input type="password" required value={authPass} onChange={e => setAuthPass(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-[#00838f] rounded-2xl px-6 py-4 font-bold text-sm outline-none transition-all shadow-sm" placeholder="••••••••" />
+               <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Clave de Acceso</label>
+               <input type="password" required value={authPass} onChange={e => setAuthPass(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-[#00838f] rounded-2xl px-6 py-4 font-bold text-sm outline-none transition-all" placeholder="••••••••" />
              </div>
              
              <button disabled={isAuthLoading} type="submit" className="w-full bg-[#263238] text-white py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-[#00838f] shadow-xl transition-all active:scale-95 mt-4 flex items-center justify-center gap-3">
@@ -243,10 +231,10 @@ const App: React.FC = () => {
                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
                    <span>{authStatus || 'Autenticando...'}</span>
                  </>
-               ) : 'ACCEDER AL PANEL'}
+               ) : 'INGRESAR A TESORERÍA'}
              </button>
           </form>
-          <p className="mt-12 text-[8px] text-center text-slate-300 font-bold uppercase tracking-widest">© 2026 ECCOS Intelligence Group.</p>
+          <p className="mt-12 text-[8px] text-center text-slate-300 font-bold uppercase tracking-widest italic tracking-[0.3em]">Auditoría Financiera ECCOS Intelligence</p>
         </div>
       </div>
     );
@@ -269,15 +257,15 @@ const App: React.FC = () => {
 
       <main className="flex-grow w-full max-w-7xl mx-auto p-4 md:p-10">
         {!hasApiKey && (
-          <div className="mb-8 bg-orange-50 border-2 border-orange-100 p-6 rounded-[30px] flex flex-col md:flex-row items-center gap-6 shadow-sm">
-            <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center text-xl">⚠️</div>
-            <div className="flex-grow text-center md:text-left">
-              <h3 className="font-black text-[11px] uppercase text-orange-700">Llave IA no detectada</h3>
-              <p className="text-[9px] font-bold text-orange-600 uppercase mt-1">
-                La IA no funcionará hasta que realices un nuevo despliegue en Vercel con la API_KEY configurada.
+          <div className="mb-8 bg-amber-50 border border-amber-200 p-6 rounded-[30px] flex flex-col md:flex-row items-center gap-6 shadow-sm">
+            <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center text-lg">⚠️</div>
+            <div className="flex-grow">
+              <h3 className="font-black text-[11px] uppercase text-amber-700 leading-none">Configuración de IA Incompleta</h3>
+              <p className="text-[9px] font-bold text-amber-600 uppercase mt-2">
+                Detectamos que la API_KEY no ha sido cargada por Vercel. Asegúrate de hacer un Redeploy con la opción "Clear Cache" activada.
               </p>
             </div>
-            <button onClick={() => window.location.reload()} className="bg-orange-600 text-white px-8 py-3 rounded-xl font-black uppercase text-[9px] shadow-lg">Reintentar</button>
+            <button onClick={() => window.location.reload()} className="bg-amber-600 text-white px-8 py-3 rounded-xl font-black uppercase text-[9px] shadow-lg">Re-Validar</button>
           </div>
         )}
 
@@ -287,9 +275,9 @@ const App: React.FC = () => {
               <div className="max-w-4xl mx-auto bg-white p-16 md:p-32 rounded-[50px] shadow-2xl text-center animate-fadeIn border-t-8 border-[#00838f]">
                 <div className="w-16 h-16 border-4 border-slate-100 border-t-[#a6ce39] rounded-full animate-spin mx-auto mb-10"></div>
                 <h2 className="text-xl font-black uppercase text-[#263238] tracking-tighter">
-                  {isSyncing ? 'Sincronizando con la Nube...' : 'IA Analizando Documento...'}
+                  {isSyncing ? 'Sincronizando con la Nube...' : 'IA Analizando Factura...'}
                 </h2>
-                <p className="mt-4 text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Por favor, mantén esta ventana abierta</p>
+                <p className="mt-4 text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Mantén esta ventana activa por favor</p>
               </div>
             ) : successMessage ? (
               <div className="max-w-4xl mx-auto bg-white p-12 md:p-24 rounded-[50px] text-center shadow-2xl border-t-8 border-[#a6ce39] animate-fadeIn">
@@ -319,12 +307,12 @@ const App: React.FC = () => {
                 <button onClick={() => setPreCategory(TransactionCategory.INGRESO)} className="group bg-white p-14 md:p-20 rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-b-8 border-transparent hover:border-[#00838f]">
                   <div className="w-14 h-14 bg-[#00838f]/10 text-[#00838f] rounded-2xl flex items-center justify-center mb-10 text-3xl font-black shadow-inner">+</div >
                   <h3 className="text-2xl font-black tracking-tighter mb-4 uppercase text-[#263238]">Ingresos</h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Facturación y Ventas</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Ventas y Facturación</p>
                 </button>
                 <button onClick={() => setPreCategory(TransactionCategory.EGRESO)} className="group bg-white p-14 md:p-20 rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-b-8 border-transparent hover:border-[#a6ce39]">
                   <div className="w-14 h-14 bg-[#a6ce39]/10 text-[#a6ce39] rounded-2xl flex items-center justify-center mb-10 text-3xl font-black shadow-inner">−</div >
                   <h3 className="text-2xl font-black tracking-tighter mb-4 uppercase text-[#263238]">Egresos</h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Gastos y Adquisiciones</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Gastos y Compras Operativas</p>
                 </button>
               </div>
             )}
@@ -338,7 +326,13 @@ const App: React.FC = () => {
               setRecords(records.map(r => r.id === id ? {...r, ...up} : r)); 
               updateRecordInDatabase(id, up); 
             }}
-            onDeleteRecord={handleDeleteRecord}
+            onDeleteRecord={(record) => {
+              if (confirm("¿Eliminar registro?")) {
+                deleteRecordFromExternalDatabase(record.id);
+                deleteFromGoogleSheets(record.invoiceNumber, record.category);
+                setRecords(records.filter(r => r.id !== record.id));
+              }
+            }}
           />
         )}
         {view === AppView.BANCOS && <ConciliationModule records={records} onConciliate={() => {}} />}
