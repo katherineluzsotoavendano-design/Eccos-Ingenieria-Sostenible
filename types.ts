@@ -70,6 +70,10 @@ export interface FinancialRecord extends ExtractedData {
   folderPath?: string[];
   approvedBy?: string;
   rejectionReason?: string;
+  creditPaymentDate?: string;
+  isCreditPaid?: boolean;
+  detractionPaymentDate?: string;
+  isDetractionPaid?: boolean;
 }
 
 export interface BankMovement {
@@ -79,6 +83,15 @@ export interface BankMovement {
   description: string;
   reference: string;
   isConciliated: boolean;
+  currency: 'PEN' | 'USD';
+}
+
+export interface AuditReport {
+  matches: string[];
+  discrepancies: string[];
+  missingInSystem: string[];
+  missingInBank: string[];
+  isEverythingOk: boolean;
 }
 
 export interface ApiResponse<T> {

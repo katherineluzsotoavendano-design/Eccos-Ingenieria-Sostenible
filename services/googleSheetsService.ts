@@ -28,7 +28,6 @@ export const saveToGoogleSheets = async (
     const isIncome = record.category === TransactionCategory.INGRESO;
     const targetSheet = isIncome ? 'INGRESOS' : 'EGRESOS';
     
-    // Construcción de data diferenciada
     const baseData: any = {
       FECHA: record.date || new Date().toISOString().split('T')[0],
       ENTIDAD: record.vendor,
@@ -46,7 +45,6 @@ export const saveToGoogleSheets = async (
       RUTA_DRIVE: record.folderPath ? record.folderPath.join(' / ') : "SIN_RUTA"
     };
 
-    // Solo agregar datos de pago si es EGRESO
     if (!isIncome) {
       baseData.CAJA = record.depositedTo || "PAGO DIRECTO";
       baseData.MONTO_PAGADO = record.voucherAmount || 0;
@@ -76,6 +74,31 @@ export const saveToGoogleSheets = async (
       : { success: false, error: result.error || "Error al sincronizar con Sheets." };
   } catch (e) {
     console.error("Error de comunicación:", e);
+    return { success: false, error: "No se pudo conectar con el servicio de Google Sheets." };
+  }
+};
+
+export const deleteFromGoogleSheets = async (invoiceNumber: string, category: TransactionCategory): Promise<ApiResponse<void>> => {
+  try {
+    const targetSheet = category === TransactionCategory.INGRESO ? 'INGRESOS' : 'EGRESOS';
+    const payload = { 
+      action: 'delete', 
+      targetSheet: targetSheet,
+      invoiceNumber: invoiceNumber 
+    };
+    
+    const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
+      method: 'POST',
+      mode: 'cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+    });
+    
+    const text = await response.text();
+    const result = handleGasResponse(text);
+    
+    return result.success ? { success: true } : { success: false, error: result.error };
+  } catch (e) {
     return { success: false, error: "No se pudo conectar con el servicio de Google Sheets." };
   }
 };

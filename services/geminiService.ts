@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { ExtractedData, FinancialRecord, ApiResponse, TransactionCategory, PaymentMode, FlowType } from "../types";
+import { ExtractedData, FinancialRecord, ApiResponse, TransactionCategory, PaymentMode, FlowType, BankMovement, AuditReport } from "../types";
 import { supabase } from "./supabaseClient";
 
 export const isApiKeyConfigured = (): boolean => {
@@ -22,14 +22,11 @@ export const processDocument = async (base64: string, mimeType: string, category
   
   const isIncome = category === TransactionCategory.INGRESO;
   
-  // Prompt con lógica de moneda PEN por defecto
   const systemInstruction = isIncome 
     ? `ACTÚA COMO AUDITOR FISCAL EXPERTO. El documento es un INGRESO (Venta).
-       IMPORTANTE: Extrae los datos del DESTINATARIO/CLIENTE/ADQUIRIENTE (quien recibe el servicio). 
-       NO extraigas los datos del emisor de la parte superior. Busca etiquetas como "Señor(es)", "Cliente", "Adquiriente".`
+       Extrae los datos del DESTINATARIO/CLIENTE/ADQUIRIENTE.`
     : `ACTÚA COMO AUDITOR FISCAL EXPERTO. El documento es un EGRESO (Gasto).
-       IMPORTANTE: Extrae los datos del EMISOR/PROVEEDOR (quien vende/emite la factura). 
-       Busca etiquetas como "Razón Social", "Empresa", "Emisor".`;
+       Extrae los datos del EMISOR/PROVEEDOR.`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
@@ -38,17 +35,8 @@ export const processDocument = async (base64: string, mimeType: string, category
         { inlineData: { mimeType, data: base64 } },
         { 
           text: `${systemInstruction} 
-          REGLA DE MONEDA: Por defecto la moneda es PEN (Soles). Solo si detectas explícitamente símbolos de dólares ($) o USD, asigna USD.
           Extrae estrictamente en JSON:
-          - vendor (Razón Social según instrucción anterior)
-          - taxId (RUC o ID Fiscal)
-          - date (Fecha de emisión YYYY-MM-DD)
-          - amount (Monto Total final)
-          - currency (PEN o USD)
-          - invoiceNumber (Serie y número)
-          - description (Resumen breve)
-          - detractionAmount (Monto de detracción o 0)
-          - paymentMode (CONTADO o CREDITO)` 
+          - vendor, taxId, date (YYYY-MM-DD), amount, currency (PEN o USD), invoiceNumber, description, detractionAmount, paymentMode (CONTADO o CREDITO)` 
         }
       ]
     },
@@ -73,10 +61,7 @@ export const processDocument = async (base64: string, mimeType: string, category
   });
 
   const parsed = JSON.parse(cleanJsonResponse(response.text));
-  
-  const normPaymentMode = parsed.paymentMode?.toUpperCase().includes('CREDIT') 
-    ? PaymentMode.CREDITO 
-    : PaymentMode.CONTADO;
+  const normPaymentMode = parsed.paymentMode?.toUpperCase().includes('CREDIT') ? PaymentMode.CREDITO : PaymentMode.CONTADO;
 
   return {
     ...parsed,
@@ -96,7 +81,7 @@ export const processVoucherIA = async (base64: string, mimeType: string): Promis
     contents: {
       parts: [
         { inlineData: { mimeType, data: base64 } },
-        { text: "Extrae FECHA (YYYY-MM-DD) y MONTO del voucher. JSON: 'date' y 'amount'." }
+        { text: "Extrae FECHA (YYYY-MM-DD) y MONTO del voucher bancario. JSON: 'date' y 'amount'." }
       ]
     },
     config: {
@@ -109,6 +94,74 @@ export const processVoucherIA = async (base64: string, mimeType: string): Promis
         },
         required: ["date", "amount"]
       }
+    }
+  });
+
+  return JSON.parse(cleanJsonResponse(response.text));
+};
+
+export const extractBankMovements = async (base64: string, mimeType: string, currency: 'PEN' | 'USD'): Promise<BankMovement[]> => {
+  if (!process.env.API_KEY) throw new Error("API_KEY is not configured");
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: {
+      parts: [
+        { inlineData: { mimeType, data: base64 } },
+        { text: `Extrae todos los movimientos bancarios (fecha, monto, descripción) del estado de cuenta en moneda ${currency}.` }
+      ]
+    },
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            date: { type: Type.STRING },
+            amount: { type: Type.NUMBER },
+            description: { type: Type.STRING },
+            reference: { type: Type.STRING }
+          },
+          required: ["date", "amount", "description"]
+        }
+      }
+    }
+  });
+
+  const parsed = JSON.parse(cleanJsonResponse(response.text));
+  return parsed.map((m: any) => ({
+    ...m,
+    id: crypto.randomUUID(),
+    isConciliated: false,
+    currency
+  }));
+};
+
+export const performAuditIA = async (movements: BankMovement[], records: FinancialRecord[]): Promise<AuditReport> => {
+  if (!process.env.API_KEY) throw new Error("API_KEY is not configured");
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+  const prompt = `ACTÚA COMO AUDITOR FINANCIERO SENIOR.
+  Compara estos MOVIMIENTOS BANCARIOS con estos REGISTROS DE SISTEMA.
+  
+  MOVIMIENTOS BANCARIOS: ${JSON.stringify(movements)}
+  REGISTROS SISTEMA: ${JSON.stringify(records)}
+  
+  Identifica coincidencias, discrepancias en montos, movimientos en banco que faltan registrar en sistema, y registros en sistema que no aparecen en el banco.
+  Devuelve JSON con:
+  - matches (string array de IDs/Facturas que coinciden perfecto)
+  - discrepancies (string array detallando diferencias de montos)
+  - missingInSystem (string array de movimientos bancarios no encontrados)
+  - missingInBank (string array de registros de sistema no vistos en banco)
+  - isEverythingOk (boolean si todo cuadra perfectamente)`;
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-pro-preview',
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
     }
   });
 
@@ -138,6 +191,26 @@ export const fetchRecordsFromExternalDatabase = async (): Promise<FinancialRecor
 export const updateRecordInDatabase = async (id: string, updates: Partial<FinancialRecord>): Promise<ApiResponse<void>> => {
   try {
     const { error } = await supabase.from('financial_records').update(updates).eq('id', id);
+    if (error) throw error;
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+};
+
+export const deleteRecordFromExternalDatabase = async (id: string): Promise<ApiResponse<void>> => {
+  try {
+    const { error } = await supabase.from('financial_records').delete().eq('id', id);
+    if (error) throw error;
+    return { success: true };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+};
+
+export const deleteAllRecordsFromExternalDatabase = async (): Promise<ApiResponse<void>> => {
+  try {
+    const { error } = await supabase.from('financial_records').delete().neq('id', '0'); 
     if (error) throw error;
     return { success: true };
   } catch (e: any) {

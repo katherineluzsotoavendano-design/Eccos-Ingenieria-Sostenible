@@ -4,9 +4,11 @@ import {
   processDocument, 
   saveToExternalDatabase, 
   fetchRecordsFromExternalDatabase, 
-  updateRecordInDatabase
+  updateRecordInDatabase,
+  deleteAllRecordsFromExternalDatabase,
+  deleteRecordFromExternalDatabase
 } from './services/geminiService';
-import { saveToGoogleSheets, loginUser } from './services/googleSheetsService';
+import { saveToGoogleSheets, loginUser, deleteFromGoogleSheets } from './services/googleSheetsService';
 import { FinancialRecord, ExtractedData, TransactionCategory, User } from './types';
 import ClassificationForm from './components/ClassificationForm';
 import ManagementTable from './components/ManagementTable';
@@ -20,6 +22,24 @@ enum AppView {
   DASHBOARD = 'DASHBOARD'
 }
 
+const EccosLogo: React.FC<{ className?: string }> = ({ className }) => (
+  <div className={`flex items-center gap-2 ${className}`}>
+    <div className="relative w-10 h-10">
+      <div className="absolute inset-0 rounded-full border-4 border-[#00838f] border-r-transparent border-b-transparent rotate-45"></div>
+      <div className="absolute inset-0 rounded-full border-4 border-[#a6ce39] border-l-transparent border-t-transparent -rotate-45"></div>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <svg viewBox="0 0 24 24" className="w-5 h-5 fill-[#4a4a49]" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+        </svg>
+      </div>
+    </div>
+    <div className="flex flex-col leading-none">
+      <span className="font-black text-white text-lg tracking-tighter">ECCOS</span>
+      <span className="text-[7px] font-bold text-[#a6ce39] tracking-[0.3em] uppercase">Intelligence</span>
+    </div>
+  </div>
+);
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
@@ -31,6 +51,7 @@ const App: React.FC = () => {
   const [records, setRecords] = useState<FinancialRecord[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [lastSavedRecord, setLastSavedRecord] = useState<FinancialRecord | null>(null);
   
   const [currentFileBase64, setCurrentFileBase64] = useState<string | null>(null);
   const [currentFileMime, setCurrentFileMime] = useState<string | null>(null);
@@ -40,19 +61,22 @@ const App: React.FC = () => {
   const [authPass, setAuthPass] = useState('');
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('fincore_session');
-    if (savedUser) setUser(JSON.parse(savedUser));
+    const savedSession = localStorage.getItem('fincore_session');
+    if (savedSession) {
+      setUser(JSON.parse(savedSession));
+    }
     loadInitialData();
   }, []);
 
   const loadInitialData = async () => {
     const remoteRecords = await fetchRecordsFromExternalDatabase();
-    if (remoteRecords.length > 0) setRecords(remoteRecords);
+    setRecords(remoteRecords);
   };
 
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('fincore_session');
+    resetFlow();
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -117,6 +141,7 @@ const App: React.FC = () => {
       } else {
         setErrorMessage(cloudRes.error || "Error al sincronizar con Sheets.");
       }
+      setLastSavedRecord(recordWithUrl);
       setRecords([recordWithUrl, ...records]);
     } catch (err) {
       setErrorMessage("Error de comunicación con el servidor.");
@@ -125,8 +150,40 @@ const App: React.FC = () => {
       setExtractedData(null);
       setPreCategory(null);
       setCurrentFileBase64(null);
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
+    }
+  };
+
+  const handleDeleteRecord = async (record: FinancialRecord) => {
+    if (confirm(`¿Eliminar definitivamente ${record.invoiceNumber}? Esta acción borrará el archivo de Drive y la fila de Sheets.`)) {
+      try {
+        await deleteRecordFromExternalDatabase(record.id);
+        await deleteFromGoogleSheets(record.invoiceNumber, record.category);
+        setRecords(records.filter(r => r.id !== record.id));
+        if (lastSavedRecord?.id === record.id) resetFlow();
+      } catch (err) {
+        alert("Problema al eliminar.");
+      }
+    }
+  };
+
+  const handleDeleteLastSaved = async () => {
+    if (lastSavedRecord) {
+      setIsSyncing(true);
+      await handleDeleteRecord(lastSavedRecord);
+      setIsSyncing(false);
+      resetFlow();
+      setSuccessMessage("🗑️ REGISTRO ELIMINADO CORRECTAMENTE.");
+      setTimeout(() => setSuccessMessage(null), 3000);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (confirm("⚠️ ¿ESTÁS SEGURO? Se borrará TODO de la base de datos.")) {
+      const res = await deleteAllRecordsFromExternalDatabase();
+      if (res.success) {
+        setRecords([]);
+        alert("Base de datos limpia.");
+      }
     }
   };
 
@@ -135,17 +192,28 @@ const App: React.FC = () => {
     setPreCategory(null);
     setSuccessMessage(null);
     setErrorMessage(null);
+    setLastSavedRecord(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
   };
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-[32px] md:rounded-[40px] shadow-2xl p-6 md:p-10 text-slate-800 animate-fadeIn">
-           <div className="flex justify-center mb-6 md:mb-8">
-            <div className="w-12 h-12 md:w-14 md:h-14 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black italic text-xl md:text-2xl shadow-xl shadow-blue-500/20">F</div>
+      <div className="min-h-screen bg-[#263238] flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl p-8 md:p-12 text-slate-800 animate-fadeIn border-t-8 border-[#00838f]">
+           <div className="flex justify-center mb-8">
+             <div className="relative w-20 h-20">
+                <div className="absolute inset-0 rounded-full border-[6px] border-[#00838f] border-r-transparent border-b-transparent rotate-45"></div>
+                <div className="absolute inset-0 rounded-full border-[6px] border-[#a6ce39] border-l-transparent border-t-transparent -rotate-45"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <svg viewBox="0 0 24 24" className="w-10 h-10 fill-[#4a4a49]" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+                  </svg>
+                </div>
+              </div>
           </div>
-          <h2 className="text-xl md:text-2xl font-black text-center uppercase tracking-tighter mb-1">FINCORE AI</h2>
-          <p className="text-slate-400 text-center font-bold text-[8px] md:text-[9px] uppercase tracking-widest mb-6 md:mb-8 italic">Control de Tesorería</p>
+          <h2 className="text-2xl font-black text-center uppercase tracking-tighter mb-1 text-[#263238]">ECCOS AI</h2>
+          <p className="text-slate-400 text-center font-bold text-[10px] uppercase tracking-widest mb-10 italic">Treasury Intelligence</p>
           
           {errorMessage && (
             <div className="mb-6 p-4 bg-red-50 border-2 border-red-100 rounded-2xl text-red-600 text-[10px] font-black uppercase text-center">
@@ -155,86 +223,114 @@ const App: React.FC = () => {
 
           <form onSubmit={handleAuth} className="space-y-4">
              <div className="space-y-1">
-               <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Correo Autorizado</label>
-               <input type="email" required value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 md:py-4 font-bold text-sm outline-none transition-all" placeholder="usuario@empresa.com" />
+               <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Usuario Eccos</label>
+               <input type="email" required value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-[#00838f] rounded-2xl px-5 py-4 font-bold text-sm outline-none transition-all" placeholder="usuario@eccos.pe" />
              </div>
              <div className="space-y-1">
                <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Contraseña</label>
-               <input type="password" required value={authPass} onChange={e => setAuthPass(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3 md:py-4 font-bold text-sm outline-none transition-all" placeholder="••••••••" />
+               <input type="password" required value={authPass} onChange={e => setAuthPass(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-[#00838f] rounded-2xl px-5 py-4 font-bold text-sm outline-none transition-all" placeholder="••••••••" />
              </div>
              
-             <button disabled={isAuthLoading} type="submit" className="w-full bg-slate-900 text-white py-4 md:py-5 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 shadow-xl transition-all active:scale-95">
-               {isAuthLoading ? 'Sincronizando...' : 'Iniciar Auditoría'}
+             <button disabled={isAuthLoading} type="submit" className="w-full bg-[#263238] text-white py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-[#00838f] shadow-xl transition-all active:scale-95 mt-4">
+               {isAuthLoading ? 'Autenticando...' : 'Iniciar Auditoría AI'}
              </button>
           </form>
-          <p className="mt-8 text-[7px] md:text-[8px] text-center text-slate-300 font-bold uppercase tracking-widest">
-            Acceso restringido: Solo personal validado.
-          </p>
+          <p className="mt-10 text-[8px] text-center text-slate-300 font-bold uppercase tracking-widest">Plataforma de Control Financiero ECCOS.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
-      <header className="bg-slate-900 text-white p-3 md:p-4 sticky top-0 z-50 shadow-xl">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="flex items-center gap-3 md:gap-4 cursor-pointer w-full md:w-auto justify-center md:justify-start" onClick={resetFlow}>
-            <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black italic">F</div>
-            <h1 className="text-base md:text-lg font-black tracking-tighter">FINCORE<span className="text-blue-400">AI</span></h1>
-          </div>
-          <nav className="flex gap-1 bg-slate-800/50 p-1 rounded-xl overflow-x-auto w-full md:w-auto custom-scrollbar no-scrollbar">
-            <button onClick={() => setView(AppView.UPLOAD)} className={`whitespace-nowrap flex-shrink-0 px-4 md:px-5 py-2 md:py-3 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.UPLOAD ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-400'}`}>AUDITORÍA</button>
-            <button onClick={() => setView(AppView.TABLE)} className={`whitespace-nowrap flex-shrink-0 px-4 md:px-5 py-2 md:py-3 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.TABLE ? 'bg-slate-700 text-white shadow-xl' : 'text-slate-400'}`}>REVISIÓN</button>
-            <button onClick={() => setView(AppView.BANCOS)} className={`whitespace-nowrap flex-shrink-0 px-4 md:px-5 py-2 md:py-3 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.BANCOS ? 'bg-indigo-600 text-white shadow-xl' : 'text-slate-400'}`}>BANCOS</button>
-            <button onClick={() => setView(AppView.DASHBOARD)} className={`whitespace-nowrap flex-shrink-0 px-4 md:px-5 py-2 md:py-3 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.DASHBOARD ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-400'}`}>MÉTRICAS</button>
-            <button onClick={handleLogout} className="whitespace-nowrap flex-shrink-0 px-4 md:px-5 py-2 md:py-3 rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase tracking-widest text-red-400">SALIR</button>
+    <div className="min-h-screen flex flex-col bg-[#f4f7f9] text-[#263238]">
+      <header className="bg-[#263238] text-white p-4 sticky top-0 z-50 shadow-2xl">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+          <EccosLogo className="cursor-pointer" />
+          
+          <nav className="flex gap-1 bg-[#1a252b] p-1 rounded-2xl overflow-x-auto w-full md:w-auto custom-scrollbar no-scrollbar">
+            <button onClick={() => { setView(AppView.UPLOAD); resetFlow(); }} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.UPLOAD ? 'bg-[#00838f] text-white shadow-xl' : 'text-slate-500 hover:text-white'}`}>AUDITORÍA</button>
+            <button onClick={() => setView(AppView.TABLE)} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.TABLE ? 'bg-[#4a4a49] text-white shadow-xl' : 'text-slate-500 hover:text-white'}`}>TESORERÍA</button>
+            <button onClick={() => setView(AppView.BANCOS)} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.BANCOS ? 'bg-[#1a252b] text-slate-400 border border-slate-700' : 'text-slate-500'}`}>BANCOS</button>
+            <button onClick={() => setView(AppView.DASHBOARD)} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.DASHBOARD ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-500 hover:text-white'}`}>MÉTRICAS</button>
+            <button onClick={handleLogout} className="whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-400 ml-2">SALIR</button>
           </nav>
         </div>
       </header>
 
-      <main className="flex-grow w-full max-w-7xl mx-auto p-4 md:p-8">
+      <main className="flex-grow w-full max-w-7xl mx-auto p-4 md:p-10">
         {view === AppView.UPLOAD && (
           <div className="w-full">
             {isProcessing || isSyncing ? (
-              <div className="max-w-4xl mx-auto bg-white p-12 md:p-24 rounded-[40px] md:rounded-[60px] shadow-2xl text-center animate-fadeIn">
-                <div className="w-16 h-16 md:w-20 md:h-20 border-[6px] md:border-[8px] border-slate-100 border-t-blue-600 rounded-full animate-spin mx-auto mb-8 md:mb-10"></div>
-                <h2 className="text-xl md:text-2xl font-black uppercase tracking-tighter text-slate-900">
-                  {isSyncing ? 'Sincronizando...' : 'Analizando Documento...'}
+              <div className="max-w-4xl mx-auto bg-white p-16 md:p-32 rounded-[50px] shadow-2xl text-center animate-fadeIn border-t-8 border-[#00838f]">
+                <div className="w-20 h-20 border-[8px] border-slate-100 border-t-[#a6ce39] rounded-full animate-spin mx-auto mb-10"></div>
+                <h2 className="text-2xl font-black uppercase tracking-tighter text-[#263238]">
+                  {isSyncing ? 'Sincronizando con ECCOS Cloud...' : 'IA Analizando Factura...'}
                 </h2>
               </div>
             ) : successMessage ? (
-              <div className="max-w-4xl mx-auto bg-white p-10 md:p-20 rounded-[40px] md:rounded-[60px] text-center shadow-2xl border border-slate-100 animate-fadeIn">
-                <div className="w-16 h-16 md:w-20 md:h-20 bg-green-50 text-green-600 rounded-[24px] md:rounded-[32px] flex items-center justify-center mx-auto mb-8 md:mb-10 text-3xl md:text-4xl font-black shadow-inner">✓</div>
-                <p className="text-lg md:text-xl font-black mb-8 md:mb-10 uppercase tracking-tighter text-slate-900">{successMessage}</p>
-                <button onClick={resetFlow} className="w-full md:w-auto bg-slate-900 text-white px-10 py-5 rounded-2xl md:rounded-[24px] font-black uppercase tracking-widest text-[10px] hover:bg-blue-600 shadow-xl transition-all">Siguiente Operación</button>
+              <div className="max-w-4xl mx-auto bg-white p-12 md:p-24 rounded-[50px] text-center shadow-2xl border-t-8 border-[#a6ce39] animate-fadeIn">
+                <div className="w-24 h-24 bg-[#a6ce39]/10 text-[#a6ce39] rounded-[40px] flex items-center justify-center mx-auto mb-12 text-5xl font-black shadow-inner">✓</div>
+                <p className="text-2xl font-black mb-12 uppercase tracking-tighter text-[#263238]">{successMessage}</p>
+                
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <button onClick={resetFlow} className="bg-[#263238] text-white px-12 py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] hover:bg-[#00838f] shadow-2xl transition-all active:scale-95">Siguiente Auditoría</button>
+                  {lastSavedRecord && (
+                    <button 
+                      onClick={handleDeleteLastSaved}
+                      className="bg-red-50 text-red-600 border-2 border-red-100 px-12 py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] hover:bg-red-600 hover:text-white transition-all shadow-sm active:scale-95"
+                    >
+                      Eliminar por Error
+                    </button>
+                  )}
+                </div>
               </div>
             ) : extractedData && preCategory ? (
               <ClassificationForm data={extractedData} initialCategory={preCategory} onSave={onRecordSaved} onCancel={resetFlow} previewUrl={previewUrl || undefined} fileMime={currentFileMime || undefined} />
             ) : preCategory ? (
-              <div className="max-w-4xl mx-auto bg-white border-4 border-dashed border-slate-200 rounded-[40px] md:rounded-[60px] p-12 md:p-24 text-center relative group hover:border-blue-500 cursor-pointer animate-fadeIn transition-all">
-                <input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileUpload} accept="image/*,application/pdf" />
-                <p className="text-xl md:text-2xl font-black uppercase tracking-tighter text-slate-900">Subir {preCategory === TransactionCategory.INGRESO ? 'Venta' : 'Gasto'}</p>
-                <p className="text-slate-400 font-bold text-[9px] md:text-[10px] mt-4 uppercase tracking-widest">Formatos PDF o Imágenes</p>
-                <button onClick={resetFlow} className="mt-8 md:mt-12 text-[8px] md:text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 px-6 md:px-8 py-3 rounded-full hover:bg-slate-200 transition-colors">← REGRESAR</button>
+              <div className="max-w-4xl mx-auto bg-white border-4 border-dashed border-slate-200 rounded-[50px] p-16 md:p-32 text-center relative animate-fadeIn transition-all shadow-sm">
+                <div className="relative group cursor-pointer border-4 border-slate-50 rounded-[40px] p-16 hover:border-[#00838f] transition-all bg-slate-50/30">
+                  <input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={handleFileUpload} accept="image/*,application/pdf" />
+                  <div className="w-20 h-20 bg-[#00838f]/10 text-[#00838f] rounded-3xl flex items-center justify-center mx-auto mb-8">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  </div>
+                  <p className="text-2xl font-black uppercase tracking-tighter text-[#263238]">Adjuntar {preCategory === TransactionCategory.INGRESO ? 'Venta' : 'Egreso'}</p>
+                  <p className="text-slate-400 font-bold text-[11px] mt-4 uppercase tracking-widest">Soporta PDF, JPG, PNG y Captura de Cámara</p>
+                </div>
+                <button 
+                  onClick={(e) => { e.stopPropagation(); resetFlow(); }} 
+                  className="mt-16 relative z-50 inline-block text-[11px] font-black text-white uppercase tracking-[0.2em] bg-[#4a4a49] px-14 py-6 rounded-full hover:bg-red-600 transition-all shadow-2xl active:scale-95"
+                >
+                  ← REGRESAR
+                </button>
               </div>
             ) : (
-              <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-6 md:gap-10 animate-fadeIn pt-4 md:pt-10">
-                <button onClick={() => setPreCategory(TransactionCategory.INGRESO)} className="group bg-white p-10 md:p-16 rounded-[40px] md:rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-4 border-transparent hover:border-green-500">
-                  <div className="w-12 h-12 md:w-16 md:h-16 bg-green-50 text-green-600 rounded-[20px] md:rounded-[24px] flex items-center justify-center mb-8 md:mb-10 text-2xl md:text-3xl font-black shadow-inner">+</div >
-                  <h3 className="text-2xl md:text-3xl font-black tracking-tighter mb-4 uppercase text-slate-900">Ingresos</h3>
-                  <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Ventas y Facturación</p>
+              <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-8 md:gap-14 animate-fadeIn pt-10">
+                <button onClick={() => setPreCategory(TransactionCategory.INGRESO)} className="group bg-white p-14 md:p-20 rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-b-8 border-transparent hover:border-[#00838f]">
+                  <div className="w-16 h-16 bg-[#00838f]/10 text-[#00838f] rounded-3xl flex items-center justify-center mb-10 text-4xl font-black shadow-inner">+</div >
+                  <h3 className="text-3xl font-black tracking-tighter mb-4 uppercase text-[#263238]">Ingresos</h3>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest italic">Facturación de Proyectos Eccos</p>
                 </button>
-                <button onClick={() => setPreCategory(TransactionCategory.EGRESO)} className="group bg-white p-10 md:p-16 rounded-[40px] md:rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-4 border-transparent hover:border-red-500">
-                  <div className="w-12 h-12 md:w-16 md:h-16 bg-red-50 text-red-600 rounded-[20px] md:rounded-[24px] flex items-center justify-center mb-8 md:mb-10 text-2xl md:text-3xl font-black shadow-inner">−</div >
-                  <h3 className="text-2xl md:text-3xl font-black tracking-tighter mb-4 uppercase text-slate-900">Egresos</h3>
-                  <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Gastos y Proveedores</p>
+                <button onClick={() => setPreCategory(TransactionCategory.EGRESO)} className="group bg-white p-14 md:p-20 rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-b-8 border-transparent hover:border-[#a6ce39]">
+                  <div className="w-16 h-16 bg-[#a6ce39]/10 text-[#a6ce39] rounded-3xl flex items-center justify-center mb-10 text-4xl font-black shadow-inner">−</div >
+                  <h3 className="text-3xl font-black tracking-tighter mb-4 uppercase text-[#263238]">Egresos</h3>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest italic">Compras, Servicios y Gastos Operativos</p>
                 </button>
               </div>
             )}
           </div>
         )}
-        {view === AppView.TABLE && <ManagementTable records={records} userRole={user.role} onUpdateRecord={(id, up) => { setRecords(records.map(r => r.id === id ? {...r, ...up} : r)); updateRecordInDatabase(id, up); }} />}
+        {view === AppView.TABLE && (
+          <ManagementTable 
+            records={records} 
+            userRole={user.role} 
+            onUpdateRecord={(id, up) => { 
+              setRecords(records.map(r => r.id === id ? {...r, ...up} : r)); 
+              updateRecordInDatabase(id, up); 
+            }}
+            onDeleteRecord={handleDeleteRecord}
+            onDeleteAll={handleDeleteAll}
+          />
+        )}
         {view === AppView.BANCOS && <ConciliationModule records={records} onConciliate={(id) => {}} />}
         {view === AppView.DASHBOARD && <Dashboard records={records} />}
       </main>

@@ -4,14 +4,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FINCORE AI | Treasury Intelligence</title>
+    <title>FINCORE AI | ECCOS Treasury</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --eccos-teal: #00838f;
+        --eccos-lime: #a6ce39;
+        --eccos-dark: #263238;
+        --eccos-gray: #4a4a49;
+      }
       body {
         font-family: 'Plus Jakarta Sans', sans-serif;
+        background-color: #f8fafc;
       }
       @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
@@ -20,7 +27,6 @@
       .animate-fadeIn {
         animation: fadeIn 0.4s ease-out forwards;
       }
-      /* Custom scrollbar for better aesthetics */
       .custom-scrollbar::-webkit-scrollbar {
         width: 6px;
       }
@@ -28,9 +34,16 @@
         background: transparent;
       }
       .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: #e2e8f0;
+        background: #cbd5e1;
         border-radius: 10px;
       }
+      /* Colores Eccos para Tailwind */
+      .bg-eccos-teal { background-color: var(--eccos-teal); }
+      .text-eccos-teal { color: var(--eccos-teal); }
+      .bg-eccos-lime { background-color: var(--eccos-lime); }
+      .text-eccos-lime { color: var(--eccos-lime); }
+      .bg-eccos-dark { background-color: var(--eccos-dark); }
+      .border-eccos-teal:focus { border-color: var(--eccos-teal); }
     </style>
   <script type="importmap">
 {
