@@ -42,6 +42,7 @@ const EccosLogo: React.FC<{ className?: string }> = ({ className }) => (
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [view, setView] = useState<AppView>(AppView.UPLOAD);
   const [preCategory, setPreCategory] = useState<TransactionCategory | null>(null);
@@ -61,11 +62,20 @@ const App: React.FC = () => {
   const [authPass, setAuthPass] = useState('');
 
   useEffect(() => {
-    const savedSession = localStorage.getItem('fincore_session');
-    if (savedSession) {
-      setUser(JSON.parse(savedSession));
-    }
-    loadInitialData();
+    const checkSession = async () => {
+      const savedSession = localStorage.getItem('fincore_session');
+      if (savedSession) {
+        try {
+          const parsedUser = JSON.parse(savedSession);
+          setUser(parsedUser);
+          await loadInitialData();
+        } catch (e) {
+          localStorage.removeItem('fincore_session');
+        }
+      }
+      setIsInitializing(false);
+    };
+    checkSession();
   }, []);
 
   const loadInitialData = async () => {
@@ -77,6 +87,7 @@ const App: React.FC = () => {
     setUser(null);
     localStorage.removeItem('fincore_session');
     resetFlow();
+    setView(AppView.UPLOAD);
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -88,6 +99,7 @@ const App: React.FC = () => {
       if (res.success && res.data) {
         setUser(res.data);
         localStorage.setItem('fincore_session', JSON.stringify(res.data));
+        await loadInitialData();
       } else {
         setErrorMessage(res.error || "No autorizado. Verifica tus datos en la hoja USERS.");
       }
@@ -197,6 +209,15 @@ const App: React.FC = () => {
     setPreviewUrl(null);
   };
 
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-[#263238] flex flex-col items-center justify-center p-4">
+        <div className="w-16 h-16 border-8 border-slate-700 border-t-[#a6ce39] rounded-full animate-spin mb-6"></div>
+        <p className="text-[#a6ce39] font-black text-[10px] uppercase tracking-[0.4em]">Iniciando ECCOS Intelligence...</p>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="min-h-screen bg-[#263238] flex items-center justify-center p-4">
@@ -245,7 +266,7 @@ const App: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-[#f4f7f9] text-[#263238]">
       <header className="bg-[#263238] text-white p-4 sticky top-0 z-50 shadow-2xl">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-          <EccosLogo className="cursor-pointer" />
+          <EccosLogo className="cursor-pointer" onClick={() => setView(AppView.UPLOAD)} />
           
           <nav className="flex gap-1 bg-[#1a252b] p-1 rounded-2xl overflow-x-auto w-full md:w-auto custom-scrollbar no-scrollbar">
             <button onClick={() => { setView(AppView.UPLOAD); resetFlow(); }} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.UPLOAD ? 'bg-[#00838f] text-white shadow-xl' : 'text-slate-500 hover:text-white'}`}>AUDITORÍA</button>
