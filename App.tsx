@@ -65,9 +65,9 @@ const App: React.FC = () => {
   const [authPass, setAuthPass] = useState('');
 
   useEffect(() => {
-    // Verificar si la API_KEY está disponible
+    // Verificación de API KEY discreta
     const key = process.env.API_KEY;
-    if (!key || key === "" || key === "undefined") {
+    if (!key || key === "" || key === "undefined" || key === "null") {
       setHasApiKey(false);
     }
 
@@ -108,21 +108,19 @@ const App: React.FC = () => {
     e.preventDefault();
     setIsAuthLoading(true);
     setErrorMessage(null);
-    setAuthStatus('Verificando credenciales...');
+    setAuthStatus('Verificando...');
     
     try {
       const res = await loginUser(authEmail, authPass);
       if (res.success && res.data) {
-        setAuthStatus('Acceso concedido...');
-        const userData = res.data;
-        setUser(userData);
-        localStorage.setItem('fincore_session', JSON.stringify(userData));
+        setUser(res.data);
+        localStorage.setItem('fincore_session', JSON.stringify(res.data));
         loadInitialData();
       } else {
-        setErrorMessage(res.error || "No autorizado.");
+        setErrorMessage(res.error || "Credenciales inválidas.");
       }
     } catch (err) {
-      setErrorMessage("Error de conexión.");
+      setErrorMessage("Error de conexión al servidor.");
     } finally {
       setIsAuthLoading(false);
       setAuthStatus('');
@@ -130,10 +128,6 @@ const App: React.FC = () => {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!hasApiKey) {
-      setErrorMessage("⚠️ ERROR CRÍTICO: La API_KEY no está configurada. Contacta a soporte.");
-      return;
-    }
     const file = e.target.files?.[0];
     if (!file || !preCategory) return;
     
@@ -147,23 +141,19 @@ const App: React.FC = () => {
     reader.onload = async () => {
       try {
         const resultStr = reader.result as string;
-        if (resultStr && resultStr.includes(',')) {
+        if (resultStr?.includes(',')) {
           const base64Content = resultStr.split(',')[1];
           setCurrentFileBase64(base64Content);
           const result = await processDocument(base64Content, file.type, preCategory);
           setExtractedData(result);
-          setIsProcessing(false);
         } else {
           throw new Error("No se pudo leer el archivo.");
         }
       } catch (err: any) {
-        setErrorMessage(err.message || "⚠️ Error en el análisis.");
+        setErrorMessage(err.message || "Error analizando documento.");
+      } finally {
         setIsProcessing(false);
       }
-    };
-    reader.onerror = () => {
-      setErrorMessage("Error al leer el archivo.");
-      setIsProcessing(false);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -171,61 +161,27 @@ const App: React.FC = () => {
 
   const onRecordSaved = async (record: FinancialRecord) => {
     setIsSyncing(true);
-    setErrorMessage(null);
     try {
       const cloudRes = await saveToGoogleSheets(record, currentFileBase64 || undefined, currentFileMime || undefined);
       const recordWithUrl = { ...record, driveUrl: cloudRes.success ? cloudRes.data?.driveUrl : undefined };
-      
       await saveToExternalDatabase(recordWithUrl);
-      
-      if (cloudRes.success) {
-        setSuccessMessage("✅ REGISTRO ÉXITOSO");
-      } else {
-        setErrorMessage(cloudRes.error || "Error al sincronizar.");
-      }
+      setSuccessMessage("✅ REGISTRO ÉXITOSO");
       setLastSavedRecord(recordWithUrl);
       setRecords([recordWithUrl, ...records]);
     } catch (err) {
-      setErrorMessage("Error de comunicación.");
+      setErrorMessage("Error al sincronizar datos.");
     } finally {
       setIsSyncing(false);
       setExtractedData(null);
       setPreCategory(null);
-      setCurrentFileBase64(null);
     }
   };
 
   const handleDeleteRecord = async (record: FinancialRecord) => {
-    if (confirm(`¿Eliminar definitivamente ${record.invoiceNumber}?`)) {
-      try {
-        await deleteRecordFromExternalDatabase(record.id);
-        await deleteFromGoogleSheets(record.invoiceNumber, record.category);
-        setRecords(records.filter(r => r.id !== record.id));
-        if (lastSavedRecord?.id === record.id) resetFlow();
-      } catch (err) {
-        alert("Problema al eliminar.");
-      }
-    }
-  };
-
-  const handleDeleteLastSaved = async () => {
-    if (lastSavedRecord) {
-      setIsSyncing(true);
-      await handleDeleteRecord(lastSavedRecord);
-      setIsSyncing(false);
-      resetFlow();
-      setSuccessMessage("🗑️ REGISTRO ELIMINADO.");
-      setTimeout(() => setSuccessMessage(null), 3000);
-    }
-  };
-
-  const handleDeleteAll = async () => {
-    if (confirm("⚠️ ¿ESTÁS SEGURO?")) {
-      const res = await deleteAllRecordsFromExternalDatabase();
-      if (res.success) {
-        setRecords([]);
-        alert("Base de datos limpia.");
-      }
+    if (confirm(`¿Eliminar ${record.invoiceNumber}?`)) {
+      await deleteRecordFromExternalDatabase(record.id);
+      await deleteFromGoogleSheets(record.invoiceNumber, record.category);
+      setRecords(records.filter(r => r.id !== record.id));
     }
   };
 
@@ -234,7 +190,6 @@ const App: React.FC = () => {
     setPreCategory(null);
     setSuccessMessage(null);
     setErrorMessage(null);
-    setLastSavedRecord(null);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(null);
   };
@@ -242,29 +197,29 @@ const App: React.FC = () => {
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-[#263238] flex flex-col items-center justify-center p-4">
-        <div className="w-16 h-16 border-8 border-slate-700 border-t-[#a6ce39] rounded-full animate-spin mb-6"></div>
-        <p className="text-[#a6ce39] font-black text-[10px] uppercase tracking-[0.4em]">Iniciando ECCOS Intelligence...</p>
+        <div className="w-12 h-12 border-4 border-slate-700 border-t-[#a6ce39] rounded-full animate-spin mb-6"></div>
+        <p className="text-[#a6ce39] font-black text-[10px] uppercase tracking-[0.4em]">Iniciando Auditoría AI...</p>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-[#263238] flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl p-8 md:p-12 text-slate-800 animate-fadeIn border-t-8 border-[#00838f]">
-           <div className="flex justify-center mb-8">
-             <div className="relative w-20 h-20">
-                <div className="absolute inset-0 rounded-full border-[6px] border-[#00838f] border-r-transparent border-b-transparent rotate-45"></div>
-                <div className="absolute inset-0 rounded-full border-[6px] border-[#a6ce39] border-l-transparent border-t-transparent -rotate-45"></div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <svg viewBox="0 0 24 24" className="w-10 h-10 fill-[#4a4a49]" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
-                  </svg>
-                </div>
+      <div className="min-h-screen bg-[#263238] flex items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-[40px] shadow-2xl p-10 md:p-14 animate-fadeIn border-t-8 border-[#00838f]">
+          <div className="flex flex-col items-center mb-10">
+            <div className="relative w-16 h-16 mb-6">
+              <div className="absolute inset-0 rounded-full border-4 border-[#00838f] border-r-transparent border-b-transparent rotate-45"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-[#a6ce39] border-l-transparent border-t-transparent -rotate-45"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <svg viewBox="0 0 24 24" className="w-8 h-8 fill-[#4a4a49]" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/>
+                </svg>
               </div>
+            </div>
+            <h2 className="text-2xl font-black uppercase tracking-tighter text-[#263238]">ECCOS Intelligence</h2>
+            <p className="text-slate-400 font-bold text-[9px] uppercase tracking-widest mt-1 italic">Treasury Control Platform</p>
           </div>
-          <h2 className="text-2xl font-black text-center uppercase tracking-tighter mb-1 text-[#263238]">ECCOS AI</h2>
-          <p className="text-slate-400 text-center font-bold text-[10px] uppercase tracking-widest mb-10 italic">Treasury Intelligence</p>
           
           {errorMessage && (
             <div className="mb-6 p-4 bg-red-50 border-2 border-red-100 rounded-2xl text-red-600 text-[10px] font-black uppercase text-center animate-bounce">
@@ -272,26 +227,26 @@ const App: React.FC = () => {
             </div>
           )}
 
-          <form onSubmit={handleAuth} className="space-y-4">
+          <form onSubmit={handleAuth} className="space-y-5">
              <div className="space-y-1">
-               <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Usuario Eccos</label>
-               <input type="email" required value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-[#00838f] rounded-2xl px-5 py-4 font-bold text-sm outline-none transition-all" placeholder="usuario@eccos.pe" />
+               <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Usuario</label>
+               <input type="email" required value={authEmail} onChange={e => setAuthEmail(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-[#00838f] rounded-2xl px-6 py-4 font-bold text-sm outline-none transition-all shadow-sm" placeholder="usuario@eccos.pe" />
              </div>
              <div className="space-y-1">
                <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Contraseña</label>
-               <input type="password" required value={authPass} onChange={e => setAuthPass(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-[#00838f] rounded-2xl px-5 py-4 font-bold text-sm outline-none transition-all" placeholder="••••••••" />
+               <input type="password" required value={authPass} onChange={e => setAuthPass(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-[#00838f] rounded-2xl px-6 py-4 font-bold text-sm outline-none transition-all shadow-sm" placeholder="••••••••" />
              </div>
              
              <button disabled={isAuthLoading} type="submit" className="w-full bg-[#263238] text-white py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-[#00838f] shadow-xl transition-all active:scale-95 mt-4 flex items-center justify-center gap-3">
                {isAuthLoading ? (
                  <>
                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                   <span>{authStatus || 'Procesando...'}</span>
+                   <span>{authStatus || 'Autenticando...'}</span>
                  </>
-               ) : 'Iniciar Auditoría AI'}
+               ) : 'ACCEDER AL PANEL'}
              </button>
           </form>
-          <p className="mt-10 text-[8px] text-center text-slate-300 font-bold uppercase tracking-widest">Plataforma de Control Financiero ECCOS.</p>
+          <p className="mt-12 text-[8px] text-center text-slate-300 font-bold uppercase tracking-widest">© 2026 ECCOS Intelligence Group.</p>
         </div>
       </div>
     );
@@ -302,32 +257,27 @@ const App: React.FC = () => {
       <header className="bg-[#263238] text-white p-4 sticky top-0 z-50 shadow-2xl">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
           <EccosLogo className="cursor-pointer" onClick={() => setView(AppView.UPLOAD)} />
-          
-          <div className="flex items-center gap-4">
-            {isDataLoading && (
-              <div className="hidden md:flex items-center gap-2 bg-[#1a252b] px-4 py-2 rounded-full border border-slate-700">
-                <div className="w-2 h-2 bg-[#a6ce39] rounded-full animate-pulse"></div>
-                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Sincronizando...</span>
-              </div>
-            )}
-            <nav className="flex gap-1 bg-[#1a252b] p-1 rounded-2xl overflow-x-auto w-full md:w-auto custom-scrollbar no-scrollbar">
-              <button onClick={() => { setView(AppView.UPLOAD); resetFlow(); }} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.UPLOAD ? 'bg-[#00838f] text-white shadow-xl' : 'text-slate-500 hover:text-white'}`}>AUDITORÍA</button>
-              <button onClick={() => setView(AppView.TABLE)} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.TABLE ? 'bg-[#4a4a49] text-white shadow-xl' : 'text-slate-500 hover:text-white'}`}>TESORERÍA</button>
-              <button onClick={() => setView(AppView.BANCOS)} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.BANCOS ? 'bg-[#1a252b] text-slate-400 border border-slate-700' : 'text-slate-500'}`}>BANCOS</button>
-              <button onClick={() => setView(AppView.DASHBOARD)} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.DASHBOARD ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-500 hover:text-white'}`}>MÉTRICAS</button>
-              <button onClick={handleLogout} className="whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-400 ml-2">SALIR</button>
-            </nav>
-          </div>
+          <nav className="flex gap-1 bg-[#1a252b] p-1 rounded-2xl overflow-x-auto w-full md:w-auto">
+            <button onClick={() => { setView(AppView.UPLOAD); resetFlow(); }} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.UPLOAD ? 'bg-[#00838f] text-white shadow-xl' : 'text-slate-500 hover:text-white'}`}>AUDITORÍA</button>
+            <button onClick={() => setView(AppView.TABLE)} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.TABLE ? 'bg-[#4a4a49] text-white shadow-xl' : 'text-slate-500 hover:text-white'}`}>TESORERÍA</button>
+            <button onClick={() => setView(AppView.BANCOS)} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.BANCOS ? 'bg-[#1a252b] text-slate-400 border border-slate-700' : 'text-slate-500 hover:text-white'}`}>BANCOS</button>
+            <button onClick={() => setView(AppView.DASHBOARD)} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.DASHBOARD ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-500 hover:text-white'}`}>MÉTRICAS</button>
+            <button onClick={handleLogout} className="px-6 py-3 rounded-xl text-[10px] font-black uppercase text-red-400 ml-2">SALIR</button>
+          </nav>
         </div>
       </header>
 
       <main className="flex-grow w-full max-w-7xl mx-auto p-4 md:p-10">
         {!hasApiKey && (
-          <div className="mb-10 bg-red-600 text-white p-8 rounded-[30px] shadow-2xl animate-pulse">
-            <h3 className="font-black text-xl uppercase italic">⚠️ Error de Configuración Crítico</h3>
-            <p className="font-bold text-[11px] uppercase tracking-widest mt-2 opacity-80">
-              No se ha detectado la llave de IA (API_KEY). Por favor, ve a Vercel, agrega la variable de entorno y haz un 'Redeploy' con 'Clear Cache'.
-            </p>
+          <div className="mb-8 bg-orange-50 border-2 border-orange-100 p-6 rounded-[30px] flex flex-col md:flex-row items-center gap-6 shadow-sm">
+            <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center text-xl">⚠️</div>
+            <div className="flex-grow text-center md:text-left">
+              <h3 className="font-black text-[11px] uppercase text-orange-700">Llave IA no detectada</h3>
+              <p className="text-[9px] font-bold text-orange-600 uppercase mt-1">
+                La IA no funcionará hasta que realices un nuevo despliegue en Vercel con la API_KEY configurada.
+              </p>
+            </div>
+            <button onClick={() => window.location.reload()} className="bg-orange-600 text-white px-8 py-3 rounded-xl font-black uppercase text-[9px] shadow-lg">Reintentar</button>
           </div>
         )}
 
@@ -335,55 +285,46 @@ const App: React.FC = () => {
           <div className="w-full">
             {isProcessing || isSyncing ? (
               <div className="max-w-4xl mx-auto bg-white p-16 md:p-32 rounded-[50px] shadow-2xl text-center animate-fadeIn border-t-8 border-[#00838f]">
-                <div className="w-20 h-20 border-[8px] border-slate-100 border-t-[#a6ce39] rounded-full animate-spin mx-auto mb-10"></div>
-                <h2 className="text-2xl font-black uppercase tracking-tighter text-[#263238]">
-                  {isSyncing ? 'Sincronizando...' : 'IA Analizando Factura...'}
+                <div className="w-16 h-16 border-4 border-slate-100 border-t-[#a6ce39] rounded-full animate-spin mx-auto mb-10"></div>
+                <h2 className="text-xl font-black uppercase text-[#263238] tracking-tighter">
+                  {isSyncing ? 'Sincronizando con la Nube...' : 'IA Analizando Documento...'}
                 </h2>
-                <p className="mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Esto puede tomar unos segundos</p>
+                <p className="mt-4 text-[9px] font-black text-slate-400 uppercase tracking-widest italic">Por favor, mantén esta ventana abierta</p>
               </div>
             ) : successMessage ? (
               <div className="max-w-4xl mx-auto bg-white p-12 md:p-24 rounded-[50px] text-center shadow-2xl border-t-8 border-[#a6ce39] animate-fadeIn">
-                <div className="w-24 h-24 bg-[#a6ce39]/10 text-[#a6ce39] rounded-[40px] flex items-center justify-center mx-auto mb-12 text-5xl font-black shadow-inner">✓</div>
-                <p className="text-2xl font-black mb-12 uppercase tracking-tighter text-[#263238]">{successMessage}</p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <button onClick={resetFlow} className="bg-[#263238] text-white px-12 py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] hover:bg-[#00838f] shadow-2xl transition-all active:scale-95">Siguiente</button>
-                  {lastSavedRecord && (
-                    <button onClick={handleDeleteLastSaved} className="bg-red-50 text-red-600 border-2 border-red-100 px-12 py-6 rounded-3xl font-black uppercase text-[11px] active:scale-95">Eliminar Error</button>
-                  )}
-                </div>
+                <div className="w-20 h-20 bg-[#a6ce39]/10 text-[#a6ce39] rounded-[30px] flex items-center justify-center mx-auto mb-10 text-4xl font-black">✓</div>
+                <p className="text-xl font-black mb-10 uppercase text-[#263238] tracking-tighter">{successMessage}</p>
+                <button onClick={resetFlow} className="bg-[#263238] text-white px-12 py-5 rounded-3xl font-black uppercase text-[11px] hover:bg-[#00838f] shadow-2xl transition-all">Nueva Operación</button>
               </div>
             ) : extractedData && preCategory ? (
               <ClassificationForm data={extractedData} initialCategory={preCategory} onSave={onRecordSaved} onCancel={resetFlow} previewUrl={previewUrl || undefined} fileMime={currentFileMime || undefined} />
             ) : preCategory ? (
               <div className="max-w-4xl mx-auto space-y-8 animate-fadeIn">
-                {errorMessage && (
-                  <div className="p-8 bg-red-50 border-4 border-red-100 rounded-[30px] text-red-600 text-center font-black uppercase text-[11px] tracking-widest">
-                    ⚠️ {errorMessage}
-                  </div>
-                )}
-                <div className="bg-white border-4 border-dashed border-slate-200 rounded-[50px] p-16 md:p-32 text-center relative transition-all shadow-sm">
+                {errorMessage && <div className="p-8 bg-red-50 border-4 border-red-100 rounded-[30px] text-red-600 text-center font-black uppercase text-[10px]">{errorMessage}</div>}
+                <div className="bg-white border-4 border-dashed border-slate-200 rounded-[50px] p-16 md:p-32 text-center shadow-sm relative transition-all">
                   <div className="relative group cursor-pointer border-4 border-slate-50 rounded-[40px] p-16 hover:border-[#00838f] transition-all bg-slate-50/30">
                     <input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={handleFileUpload} accept="image/*,application/pdf" />
-                    <div className="w-20 h-20 bg-[#00838f]/10 text-[#00838f] rounded-3xl flex items-center justify-center mx-auto mb-8">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <div className="w-16 h-16 bg-[#00838f]/10 text-[#00838f] rounded-2xl flex items-center justify-center mx-auto mb-6">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                     </div>
-                    <p className="text-2xl font-black uppercase tracking-tighter text-[#263238]">Adjuntar {preCategory === TransactionCategory.INGRESO ? 'Venta' : 'Egreso'}</p>
-                    <p className="text-slate-400 font-bold text-[11px] mt-4 uppercase tracking-widest italic">Soporta PDF, JPG, PNG</p>
+                    <p className="text-xl font-black uppercase tracking-tighter text-[#263238]">Adjuntar {preCategory === TransactionCategory.INGRESO ? 'Factura Venta' : 'Documento Egreso'}</p>
+                    <p className="text-slate-400 font-bold text-[10px] mt-4 uppercase tracking-[0.2em] italic">PDF, JPG o PNG</p>
                   </div>
-                  <button onClick={(e) => { e.stopPropagation(); resetFlow(); }} className="mt-16 text-[11px] font-black text-white uppercase tracking-[0.2em] bg-[#4a4a49] px-14 py-6 rounded-full shadow-2xl active:scale-95">← REGRESAR</button>
+                  <button onClick={resetFlow} className="mt-12 text-[10px] font-black text-slate-400 uppercase hover:text-[#263238] transition-colors tracking-widest flex items-center gap-2 mx-auto">← REGRESAR</button>
                 </div>
               </div>
             ) : (
-              <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-8 md:gap-14 animate-fadeIn pt-10">
+              <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-8 md:gap-14 animate-fadeIn pt-10 pb-20">
                 <button onClick={() => setPreCategory(TransactionCategory.INGRESO)} className="group bg-white p-14 md:p-20 rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-b-8 border-transparent hover:border-[#00838f]">
-                  <div className="w-16 h-16 bg-[#00838f]/10 text-[#00838f] rounded-3xl flex items-center justify-center mb-10 text-4xl font-black shadow-inner">+</div >
-                  <h3 className="text-3xl font-black tracking-tighter mb-4 uppercase text-[#263238]">Ingresos</h3>
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest italic">Facturación de Proyectos</p>
+                  <div className="w-14 h-14 bg-[#00838f]/10 text-[#00838f] rounded-2xl flex items-center justify-center mb-10 text-3xl font-black shadow-inner">+</div >
+                  <h3 className="text-2xl font-black tracking-tighter mb-4 uppercase text-[#263238]">Ingresos</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Facturación y Ventas</p>
                 </button>
                 <button onClick={() => setPreCategory(TransactionCategory.EGRESO)} className="group bg-white p-14 md:p-20 rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-b-8 border-transparent hover:border-[#a6ce39]">
-                  <div className="w-16 h-16 bg-[#a6ce39]/10 text-[#a6ce39] rounded-3xl flex items-center justify-center mb-10 text-4xl font-black shadow-inner">−</div >
-                  <h3 className="text-3xl font-black tracking-tighter mb-4 uppercase text-[#263238]">Egresos</h3>
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest italic">Gastos Operativos</p>
+                  <div className="w-14 h-14 bg-[#a6ce39]/10 text-[#a6ce39] rounded-2xl flex items-center justify-center mb-10 text-3xl font-black shadow-inner">−</div >
+                  <h3 className="text-2xl font-black tracking-tighter mb-4 uppercase text-[#263238]">Egresos</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">Gastos y Adquisiciones</p>
                 </button>
               </div>
             )}
@@ -398,10 +339,9 @@ const App: React.FC = () => {
               updateRecordInDatabase(id, up); 
             }}
             onDeleteRecord={handleDeleteRecord}
-            onDeleteAll={handleDeleteAll}
           />
         )}
-        {view === AppView.BANCOS && <ConciliationModule records={records} onConciliate={(id) => {}} />}
+        {view === AppView.BANCOS && <ConciliationModule records={records} onConciliate={() => {}} />}
         {view === AppView.DASHBOARD && <Dashboard records={records} />}
       </main>
     </div>
