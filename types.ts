@@ -44,6 +44,7 @@ export interface ExtractedData {
   taxId: string; 
   date: string;
   amount: number;
+  igvAmount: number;
   currency: string;
   invoiceNumber: string;
   description: string;

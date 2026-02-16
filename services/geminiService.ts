@@ -4,7 +4,6 @@ import { ExtractedData, FinancialRecord, ApiResponse, TransactionCategory, Payme
 import { supabase } from "./supabaseClient";
 
 const getApiKey = () => {
-  // En Vite, process.env es inyectado por el config durante el build
   const key = process.env.API_KEY;
   if (!key || key === "" || key === "undefined" || key === "null") return null;
   return key;
@@ -22,7 +21,7 @@ const cleanJsonResponse = (text: string): string => {
 export const processDocument = async (base64: string, mimeType: string, category: TransactionCategory): Promise<ExtractedData> => {
   const apiKey = getApiKey();
   if (!apiKey) {
-    throw new Error("CONFIG_MISSING: No se detectó la llave API_KEY en el despliegue actual. Por favor, realiza un 'Redeploy' con 'Clear Cache' en Vercel.");
+    throw new Error("CONFIG_MISSING: No se detectó la llave API_KEY.");
   }
   
   const ai = new GoogleGenAI({ apiKey });
@@ -35,8 +34,18 @@ export const processDocument = async (base64: string, mimeType: string, category
         parts: [
           { inlineData: { mimeType, data: base64 } },
           { 
-            text: `Eres un experto contable. Analiza este ${isIncome ? 'Ingreso/Venta' : 'Egreso/Gasto'}.
-            Extrae en JSON: vendor (nombre), taxId (RUC), date (YYYY-MM-DD), amount (número), currency (PEN/USD), invoiceNumber, description, detractionAmount, paymentMode (CONTADO/CREDITO)` 
+            text: `Eres un experto contable peruano. Analiza este ${isIncome ? 'Ingreso/Venta' : 'Egreso/Gasto'}.
+            Extrae en JSON:
+            - vendor: nombre del proveedor o cliente
+            - taxId: RUC
+            - date: fecha emisión (YYYY-MM-DD)
+            - amount: MONTO TOTAL (incluye IGV)
+            - igvAmount: MONTO DEL IGV (18%). Si no figura, calcúlalo como (Total / 1.18) * 0.18.
+            - currency: PEN o USD
+            - invoiceNumber: Serie-Correlativo
+            - description: Breve detalle
+            - detractionAmount: si aplica detracción
+            - paymentMode: CONTADO o CREDITO` 
           }
         ]
       },
@@ -49,13 +58,14 @@ export const processDocument = async (base64: string, mimeType: string, category
             taxId: { type: Type.STRING },
             date: { type: Type.STRING },
             amount: { type: Type.NUMBER },
+            igvAmount: { type: Type.NUMBER },
             currency: { type: Type.STRING },
             invoiceNumber: { type: Type.STRING },
             description: { type: Type.STRING },
             detractionAmount: { type: Type.NUMBER },
             paymentMode: { type: Type.STRING }
           },
-          required: ["vendor", "taxId", "date", "amount", "currency", "invoiceNumber"]
+          required: ["vendor", "taxId", "date", "amount", "igvAmount", "currency", "invoiceNumber"]
         }
       }
     });
@@ -75,7 +85,7 @@ export const processDocument = async (base64: string, mimeType: string, category
     } as ExtractedData;
   } catch (error: any) {
     console.error("Gemini Error:", error);
-    throw new Error(`Error de IA: ${error.message || "No se pudo procesar el documento"}`);
+    throw new Error(`Error de IA: ${error.message || "No se pudo procesar"}`);
   }
 };
 

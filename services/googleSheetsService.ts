@@ -1,7 +1,6 @@
 
 import { FinancialRecord, ApiResponse, User, TransactionCategory } from "../types";
 
-// Ruta interna de nuestra API en Vercel
 const INTERNAL_PROXY_URL = '/api/proxy';
 
 const handleGasResponse = (text: string) => {
@@ -31,6 +30,8 @@ export const saveToGoogleSheets = async (
       N_FACTURA: record.invoiceNumber,
       DESCRIPCION: record.description || "Registro Auditoría AI",
       MONTO: record.amount,
+      IGV: record.igvAmount || 0,
+      BASE: (record.amount - (record.igvAmount || 0)),
       MONEDA: record.currency,
       MODALIDAD: record.paymentMode,
       FLUJO_CAJA: record.flowType,

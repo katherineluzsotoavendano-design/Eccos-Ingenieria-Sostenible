@@ -20,7 +20,7 @@ const ManagementTable: React.FC<Props> = ({ records, userRole, onUpdateRecord, o
     const matchesText = r.vendor.toLowerCase().includes(filter.toLowerCase()) || 
                        r.invoiceNumber.toLowerCase().includes(filter.toLowerCase());
     
-    const recordDate = r.date; // Formato YYYY-MM-DD
+    const recordDate = r.date; 
     const matchesStart = startDate ? recordDate >= startDate : true;
     const matchesEnd = endDate ? recordDate <= endDate : true;
 
@@ -56,7 +56,6 @@ const ManagementTable: React.FC<Props> = ({ records, userRole, onUpdateRecord, o
         </div>
         
         <div className="flex flex-col sm:flex-row flex-wrap gap-4 w-full lg:w-auto items-end">
-          {/* Filtro Calendario */}
           <div className="flex items-center gap-2 bg-white p-2 rounded-[24px] shadow-sm border border-slate-100">
             <div className="flex flex-col px-3">
               <label className="text-[8px] font-black uppercase text-slate-400 ml-1">Desde</label>
@@ -84,7 +83,6 @@ const ManagementTable: React.FC<Props> = ({ records, userRole, onUpdateRecord, o
             )}
           </div>
 
-          {/* Filtro Texto */}
           <div className="relative">
              <input 
               type="text" 
@@ -114,7 +112,8 @@ const ManagementTable: React.FC<Props> = ({ records, userRole, onUpdateRecord, o
               <tr className="bg-slate-50/50 border-b border-slate-100">
                 <th className="px-8 py-7 text-[10px] font-black uppercase tracking-widest text-slate-400">Entidad / Clasificación</th>
                 <th className="px-8 py-7 text-[10px] font-black uppercase tracking-widest text-slate-400">Emisión</th>
-                <th className="px-8 py-7 text-[10px] font-black uppercase tracking-widest text-slate-400">Importe Total</th>
+                <th className="px-8 py-7 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">Base / IGV (18%)</th>
+                <th className="px-8 py-7 text-[10px] font-black uppercase tracking-widest text-slate-400">Total</th>
                 <th className="px-8 py-7 text-[10px] font-black uppercase tracking-widest text-slate-400">Estado Auditoría</th>
                 <th className="px-8 py-7 text-[10px] font-black uppercase tracking-widest text-slate-400">Tesorería (Seguimiento)</th>
                 <th className="px-8 py-7 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Acciones</th>
@@ -140,6 +139,13 @@ const ManagementTable: React.FC<Props> = ({ records, userRole, onUpdateRecord, o
                     <div className="flex flex-col">
                        <span className="text-[12px] font-black text-[#263238]">{record.date}</span>
                        <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest mt-0.5">Fecha Documento</span>
+                    </div>
+                  </td>
+
+                  <td className="px-8 py-7 text-center">
+                    <div className="flex flex-col items-center">
+                       <span className="text-[10px] font-bold text-slate-400">Base: {(record.amount - record.igvAmount).toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
+                       <span className="text-[12px] font-black text-[#00838f] mt-1">IGV: {record.igvAmount.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</span>
                     </div>
                   </td>
                   
@@ -221,7 +227,7 @@ const ManagementTable: React.FC<Props> = ({ records, userRole, onUpdateRecord, o
           </table>
           {filtered.length === 0 && (
             <div className="p-20 text-center">
-               <p className="text-[11px] font-black uppercase text-slate-300 tracking-widest">No se encontraron registros en este rango o búsqueda</p>
+               <p className="text-[11px] font-black uppercase text-slate-300 tracking-widest">No se encontraron registros</p>
             </div>
           )}
         </div>

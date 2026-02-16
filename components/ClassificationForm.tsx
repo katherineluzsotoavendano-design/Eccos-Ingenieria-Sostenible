@@ -21,6 +21,7 @@ const ClassificationForm: React.FC<Props> = ({ data, initialCategory, onSave, on
   
   const [formData, setFormData] = useState<ExtractedData>({
     ...data,
+    igvAmount: data.igvAmount || 0,
     paymentMode: data.paymentMode || PaymentMode.CONTADO,
     flowType: data.flowType || FlowType.CFO,
     incomeType: isIncome ? (data.incomeType || 'VENTAS') : undefined,
@@ -69,7 +70,6 @@ const ClassificationForm: React.FC<Props> = ({ data, initialCategory, onSave, on
           description: (prev.description || "") + ` (Voucher detectado: ${result?.date || 'N/A'})`
         }));
       } catch (err) {
-        // En caso de error de IA, aún guardamos el base64 del archivo
         setFormData(prev => ({ ...prev, voucherFileBase64: base64 }));
       } finally {
         setIsProcessingVoucher(false);
@@ -95,7 +95,6 @@ const ClassificationForm: React.FC<Props> = ({ data, initialCategory, onSave, on
 
   return (
     <div className="flex flex-col lg:flex-row w-full min-h-screen lg:h-[94vh] bg-white rounded-[40px] shadow-2xl overflow-hidden border border-slate-200 animate-fadeIn mb-10 lg:mb-0">
-      {/* Visor */}
       <div className="w-full lg:w-5/12 bg-slate-100 flex flex-col relative border-b lg:border-b-0 lg:border-r border-slate-200 h-[300px] md:h-full">
         <div className="bg-[#263238] px-8 py-5 flex justify-between items-center text-white">
           <span className="text-[10px] font-black uppercase tracking-widest italic">Lectura Auditoría AI</span>
@@ -118,7 +117,6 @@ const ClassificationForm: React.FC<Props> = ({ data, initialCategory, onSave, on
         </div>
       </div>
 
-      {/* Formulario */}
       <div className="w-full lg:w-7/12 flex flex-col overflow-y-auto custom-scrollbar p-8 md:p-14 bg-white">
         <div className="flex flex-col md:flex-row justify-between items-start border-b border-slate-100 pb-8 mb-10 gap-6">
           <div>
@@ -149,16 +147,20 @@ const ClassificationForm: React.FC<Props> = ({ data, initialCategory, onSave, on
                 <input type="date" required value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full bg-white border-2 border-transparent focus:border-[#00838f] rounded-2xl px-4 py-4 font-bold text-xs shadow-sm" />
               </div>
               <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Importe ({formData.currency})</label>
+                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Total ({formData.currency})</label>
                 <input type="number" step="0.01" required value={formData.amount} onChange={e => setFormData({...formData, amount: parseFloat(e.target.value)})} className="w-full bg-white border-2 border-transparent focus:border-[#00838f] rounded-2xl px-5 py-4 font-black text-xs shadow-sm" />
               </div>
-              <div className="space-y-2 col-span-2 md:col-span-1">
-                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Serie-Número</label>
-                <input type="text" value={formData.invoiceNumber} onChange={e => setFormData({...formData, invoiceNumber: e.target.value})} className="w-full bg-white border-2 border-transparent focus:border-[#00838f] rounded-2xl px-5 py-4 font-bold text-xs shadow-sm" />
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">IGV 18%</label>
+                <input type="number" step="0.01" required value={formData.igvAmount} onChange={e => setFormData({...formData, igvAmount: parseFloat(e.target.value)})} className="w-full bg-white border-2 border-transparent focus:border-[#00838f] rounded-2xl px-5 py-4 font-black text-xs shadow-sm text-[#00838f]" />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+               <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Serie-Número</label>
+                <input type="text" value={formData.invoiceNumber} onChange={e => setFormData({...formData, invoiceNumber: e.target.value})} className="w-full bg-white border-2 border-transparent focus:border-[#00838f] rounded-2xl px-5 py-4 font-bold text-xs shadow-sm" />
+              </div>
               <div className="space-y-2">
                 <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Condición de Pago</label>
                 <select value={formData.paymentMode} onChange={e => setFormData({...formData, paymentMode: e.target.value as PaymentMode})} className="w-full bg-white border-2 border-transparent focus:border-[#00838f] rounded-2xl px-5 py-4 font-black text-xs outline-none shadow-sm cursor-pointer">
@@ -174,7 +176,7 @@ const ClassificationForm: React.FC<Props> = ({ data, initialCategory, onSave, on
           </div>
 
           <div className="bg-[#263238] p-8 md:p-12 rounded-[50px] shadow-2xl space-y-8 border-t-8 border-[#00838f]">
-            <h3 className="text-[10px] font-black text-[#a6ce39] uppercase tracking-[0.3em]">2. Sincronización Eccos Cloud ({drivePathInfo.year} / {drivePathInfo.month})</h3>
+            <h3 className="text-[10px] font-black text-[#a6ce39] uppercase tracking-[0.3em]">2. Sincronización Cloud ({drivePathInfo.year} / {drivePathInfo.month})</h3>
             
             <div className="space-y-5">
                <div className="flex items-center gap-3 bg-[#1a252b] p-5 rounded-3xl border border-slate-700 overflow-hidden">
