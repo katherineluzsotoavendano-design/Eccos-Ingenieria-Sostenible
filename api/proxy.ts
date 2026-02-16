@@ -10,15 +10,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const GAS_URL = process.env.GOOGLE_SHEETS_WEBHOOK_URL;
   const SECRET_TOKEN = process.env.INTERNAL_PROXY_TOKEN;
 
+  // Si falta alguna configuración, lo indicamos detalladamente para el usuario
   if (!GAS_URL || !SECRET_TOKEN) {
+    const missing = [];
+    if (!GAS_URL) missing.push('GOOGLE_SHEETS_WEBHOOK_URL');
+    if (!SECRET_TOKEN) missing.push('INTERNAL_PROXY_TOKEN');
+    
     return res.status(500).json({ 
       success: false, 
-      error: 'Configuración incompleta: Faltan variables de entorno en Vercel (URL o Token).' 
+      error: `CONFIGURACIÓN INCOMPLETA: Faltan las variables [${missing.join(', ')}] en Vercel. Agrégalas en Settings > Environment Variables y realiza un REDEPLOY.` 
     });
   }
 
   try {
-    // Vercel puede parsear el body automáticamente o recibirlo como string
+    // Manejo flexible del body (objeto o string)
     const payload = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     
     // Inyectamos el token de seguridad que valida el Apps Script
@@ -27,19 +32,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       proxyToken: SECRET_TOKEN
     };
 
-    // Llamada a Google Apps Script desde el servidor (IP segura)
+    // Llamada a Google Apps Script
     const response = await fetch(GAS_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(securePayload),
-      redirect: 'follow' // CRÍTICO: Google suele redireccionar la respuesta del script
+      redirect: 'follow'
     });
 
     const data = await response.text();
     
-    // Enviamos la respuesta de vuelta al frontend
+    // Enviamos la respuesta de vuelta
     res.status(200).send(data);
   } catch (error: any) {
     console.error('Error en Proxy:', error);
