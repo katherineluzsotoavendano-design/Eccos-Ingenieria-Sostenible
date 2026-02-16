@@ -1,21 +1,17 @@
 
 import { FinancialRecord, ApiResponse, User, TransactionCategory } from "../types";
 
-const GOOGLE_SHEETS_WEBHOOK_URL = 'https://script.google.com/macros/s/AKfycbwrn2akFehr4jNyBKooVx1Nl37DCE9xSe8EqkgN_SL7DLkcUVTHcFArcAPqnpMcthC-Xw/exec';
+// Ruta interna de nuestra API en Vercel
+const INTERNAL_PROXY_URL = '/api/proxy';
 
 const handleGasResponse = (text: string) => {
-  if (!text || text.trim() === "") return { success: false, error: "El servidor de Google no envió respuesta." };
+  if (!text || text.trim() === "") return { success: false, error: "El servidor de Google no respondió." };
   try {
     const json = JSON.parse(text);
     return json;
   } catch (e) {
-    if (text.includes("<!DOCTYPE html>") || text.includes("<html")) {
-      return { 
-        success: false, 
-        error: "Error de Configuración: El Script no está publicado correctamente como 'Cualquier Persona' (Anyone)." 
-      };
-    }
-    return { success: false, error: "Error al interpretar la respuesta del servidor de Google." };
+    console.error("Error parseando respuesta:", text);
+    return { success: false, error: "Error en el formato de respuesta del servidor." };
   }
 };
 
@@ -59,10 +55,9 @@ export const saveToGoogleSheets = async (
       data: baseData
     };
     
-    const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
+    const response = await fetch(INTERNAL_PROXY_URL, {
       method: 'POST',
-      mode: 'cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     
@@ -73,8 +68,7 @@ export const saveToGoogleSheets = async (
       ? { success: true, data: { driveUrl: result.driveUrl } } 
       : { success: false, error: result.error || "Error al sincronizar con Sheets." };
   } catch (e) {
-    console.error("Error de comunicación:", e);
-    return { success: false, error: "No se pudo conectar con el servicio de Google Sheets." };
+    return { success: false, error: "No se pudo conectar con el servidor de seguridad." };
   }
 };
 
@@ -87,10 +81,9 @@ export const deleteFromGoogleSheets = async (invoiceNumber: string, category: Tr
       invoiceNumber: invoiceNumber 
     };
     
-    const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
+    const response = await fetch(INTERNAL_PROXY_URL, {
       method: 'POST',
-      mode: 'cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     
@@ -99,7 +92,7 @@ export const deleteFromGoogleSheets = async (invoiceNumber: string, category: Tr
     
     return result.success ? { success: true } : { success: false, error: result.error };
   } catch (e) {
-    return { success: false, error: "No se pudo conectar con el servicio de Google Sheets." };
+    return { success: false, error: "Error de conexión con el servidor." };
   }
 };
 
@@ -111,10 +104,9 @@ export const loginUser = async (email: string, password: string): Promise<ApiRes
       password: password.toString().trim() 
     };
 
-    const response = await fetch(GOOGLE_SHEETS_WEBHOOK_URL, {
+    const response = await fetch(INTERNAL_PROXY_URL, {
       method: 'POST',
-      mode: 'cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     
@@ -127,9 +119,9 @@ export const loginUser = async (email: string, password: string): Promise<ApiRes
 
     return { 
       success: false, 
-      error: result.error || "Acceso denegado. Revisa tus credenciales en la hoja 'USERS'." 
+      error: result.error || "Credenciales incorrectas o usuario no registrado." 
     };
   } catch (e) {
-    return { success: false, error: "Error de conexión: No se pudo validar el acceso." };
+    return { success: false, error: "Error de red al intentar autenticar." };
   }
 };
