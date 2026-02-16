@@ -3,8 +3,10 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { ExtractedData, FinancialRecord, ApiResponse, TransactionCategory, PaymentMode, FlowType, BankMovement, AuditReport } from "../types";
 import { supabase } from "./supabaseClient";
 
-export const isApiKeyConfigured = (): boolean => {
-  return !!process.env.API_KEY;
+const getApiKey = () => {
+  const key = process.env.API_KEY;
+  if (!key || key === "" || key === "undefined") return null;
+  return key;
 };
 
 const cleanJsonResponse = (text: string): string => {
@@ -17,83 +19,80 @@ const cleanJsonResponse = (text: string): string => {
 };
 
 export const processDocument = async (base64: string, mimeType: string, category: TransactionCategory): Promise<ExtractedData> => {
-  if (!process.env.API_KEY) throw new Error("API_KEY is not configured");
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error("ERROR CRÍTICO: No se detectó la API_KEY de Gemini. Asegúrate de que esté configurada en Vercel antes del despliegue.");
+  }
   
+  const ai = new GoogleGenAI({ apiKey });
   const isIncome = category === TransactionCategory.INGRESO;
   
-  const systemInstruction = isIncome 
-    ? `ACTÚA COMO AUDITOR FISCAL EXPERTO. El documento es un INGRESO (Venta).
-       Extrae los datos del DESTINATARIO/CLIENTE/ADQUIRIENTE.`
-    : `ACTÚA COMO AUDITOR FISCAL EXPERTO. El documento es un EGRESO (Gasto).
-       Extrae los datos del EMISOR/PROVEEDOR.`;
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: {
-      parts: [
-        { inlineData: { mimeType, data: base64 } },
-        { 
-          text: `${systemInstruction} 
-          Extrae estrictamente en JSON:
-          - vendor, taxId, date (YYYY-MM-DD), amount, currency (PEN o USD), invoiceNumber, description, detractionAmount, paymentMode (CONTADO o CREDITO)` 
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: {
+        parts: [
+          { inlineData: { mimeType, data: base64 } },
+          { 
+            text: `Eres un experto contable. Analiza este ${isIncome ? 'Ingreso/Venta' : 'Egreso/Gasto'}.
+            Extrae en JSON: vendor (nombre), taxId (RUC), date (YYYY-MM-DD), amount (número), currency (PEN/USD), invoiceNumber, description, detractionAmount, paymentMode (CONTADO/CREDITO)` 
+          }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            vendor: { type: Type.STRING },
+            taxId: { type: Type.STRING },
+            date: { type: Type.STRING },
+            amount: { type: Type.NUMBER },
+            currency: { type: Type.STRING },
+            invoiceNumber: { type: Type.STRING },
+            description: { type: Type.STRING },
+            detractionAmount: { type: Type.NUMBER },
+            paymentMode: { type: Type.STRING }
+          },
+          required: ["vendor", "taxId", "date", "amount", "currency", "invoiceNumber"]
         }
-      ]
-    },
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          vendor: { type: Type.STRING },
-          taxId: { type: Type.STRING },
-          date: { type: Type.STRING },
-          amount: { type: Type.NUMBER },
-          currency: { type: Type.STRING },
-          invoiceNumber: { type: Type.STRING },
-          description: { type: Type.STRING },
-          detractionAmount: { type: Type.NUMBER },
-          paymentMode: { type: Type.STRING }
-        },
-        required: ["vendor", "taxId", "date", "amount", "currency", "invoiceNumber"]
       }
-    }
-  });
+    });
 
-  const parsed = JSON.parse(cleanJsonResponse(response.text));
-  const normPaymentMode = parsed.paymentMode?.toUpperCase().includes('CREDIT') ? PaymentMode.CREDITO : PaymentMode.CONTADO;
+    const textResponse = response.text;
+    if (!textResponse) throw new Error("La IA no devolvió contenido.");
+    
+    const parsed = JSON.parse(cleanJsonResponse(textResponse));
+    const normPaymentMode = parsed.paymentMode?.toUpperCase().includes('CREDIT') ? PaymentMode.CREDITO : PaymentMode.CONTADO;
 
-  return {
-    ...parsed,
-    paymentMode: normPaymentMode,
-    flowType: FlowType.CFO,
-    serviceLine: isIncome ? 'Auditoría Tradicional' : 'ECCOS GASTO',
-    targetFolder: isIncome ? 'VENTAS' : 'COMPRAS'
-  } as ExtractedData;
+    return {
+      ...parsed,
+      paymentMode: normPaymentMode,
+      flowType: FlowType.CFO,
+      serviceLine: isIncome ? 'Auditoría Tradicional' : 'ECCOS GASTO',
+      targetFolder: isIncome ? 'VENTAS' : 'COMPRAS'
+    } as ExtractedData;
+  } catch (error: any) {
+    console.error("Gemini Error:", error);
+    throw new Error(`Error de IA: ${error.message || "No se pudo procesar el documento"}`);
+  }
 };
 
 export const processVoucherIA = async (base64: string, mimeType: string): Promise<{ date: string, amount: number }> => {
-  if (!process.env.API_KEY) throw new Error("API_KEY is not configured");
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API_KEY_MISSING");
+  
+  const ai = new GoogleGenAI({ apiKey });
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: {
       parts: [
         { inlineData: { mimeType, data: base64 } },
-        { text: "Extrae FECHA (YYYY-MM-DD) y MONTO del voucher bancario. JSON: 'date' y 'amount'." }
+        { text: "Extrae FECHA (YYYY-MM-DD) y MONTO del voucher. JSON: 'date' y 'amount'." }
       ]
     },
     config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          date: { type: Type.STRING },
-          amount: { type: Type.NUMBER }
-        },
-        required: ["date", "amount"]
-      }
+      responseMimeType: "application/json"
     }
   });
 
@@ -101,33 +100,19 @@ export const processVoucherIA = async (base64: string, mimeType: string): Promis
 };
 
 export const extractBankMovements = async (base64: string, mimeType: string, currency: 'PEN' | 'USD'): Promise<BankMovement[]> => {
-  if (!process.env.API_KEY) throw new Error("API_KEY is not configured");
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API_KEY_MISSING");
+  const ai = new GoogleGenAI({ apiKey });
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: {
       parts: [
         { inlineData: { mimeType, data: base64 } },
-        { text: `Extrae todos los movimientos bancarios (fecha, monto, descripción) del estado de cuenta en moneda ${currency}.` }
+        { text: `Extrae todos los movimientos bancarios en moneda ${currency}.` }
       ]
     },
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            date: { type: Type.STRING },
-            amount: { type: Type.NUMBER },
-            description: { type: Type.STRING },
-            reference: { type: Type.STRING }
-          },
-          required: ["date", "amount", "description"]
-        }
-      }
-    }
+    config: { responseMimeType: "application/json" }
   });
 
   const parsed = JSON.parse(cleanJsonResponse(response.text));
@@ -140,29 +125,16 @@ export const extractBankMovements = async (base64: string, mimeType: string, cur
 };
 
 export const performAuditIA = async (movements: BankMovement[], records: FinancialRecord[]): Promise<AuditReport> => {
-  if (!process.env.API_KEY) throw new Error("API_KEY is not configured");
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API_KEY_MISSING");
+  const ai = new GoogleGenAI({ apiKey });
 
-  const prompt = `ACTÚA COMO AUDITOR FINANCIERO SENIOR.
-  Compara estos MOVIMIENTOS BANCARIOS con estos REGISTROS DE SISTEMA.
-  
-  MOVIMIENTOS BANCARIOS: ${JSON.stringify(movements)}
-  REGISTROS SISTEMA: ${JSON.stringify(records)}
-  
-  Identifica coincidencias, discrepancias en montos, movimientos en banco que faltan registrar en sistema, y registros en sistema que no aparecen en el banco.
-  Devuelve JSON con:
-  - matches (string array de IDs/Facturas que coinciden perfecto)
-  - discrepancies (string array detallando diferencias de montos)
-  - missingInSystem (string array de movimientos bancarios no encontrados)
-  - missingInBank (string array de registros de sistema no vistos en banco)
-  - isEverythingOk (boolean si todo cuadra perfectamente)`;
+  const prompt = `Compara estos movimientos: ${JSON.stringify(movements)} con estos registros: ${JSON.stringify(records)}. Devuelve JSON: matches, discrepancies, missingInSystem, missingInBank, isEverythingOk`;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-preview',
     contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-    }
+    config: { responseMimeType: "application/json" }
   });
 
   return JSON.parse(cleanJsonResponse(response.text));

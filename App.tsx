@@ -43,11 +43,13 @@ const EccosLogo: React.FC<{ className?: string }> = ({ className }) => (
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [authStatus, setAuthStatus] = useState<string>('');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [view, setView] = useState<AppView>(AppView.UPLOAD);
   const [preCategory, setPreCategory] = useState<TransactionCategory | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(false);
   const [extractedData, setExtractedData] = useState<ExtractedData | null>(null);
   const [records, setRecords] = useState<FinancialRecord[]>([]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -68,7 +70,8 @@ const App: React.FC = () => {
         try {
           const parsedUser = JSON.parse(savedSession);
           setUser(parsedUser);
-          await loadInitialData();
+          // Carga datos en background
+          loadInitialData();
         } catch (e) {
           localStorage.removeItem('fincore_session');
         }
@@ -79,8 +82,13 @@ const App: React.FC = () => {
   }, []);
 
   const loadInitialData = async () => {
-    const remoteRecords = await fetchRecordsFromExternalDatabase();
-    setRecords(remoteRecords);
+    setIsDataLoading(true);
+    try {
+      const remoteRecords = await fetchRecordsFromExternalDatabase();
+      setRecords(remoteRecords);
+    } finally {
+      setIsDataLoading(false);
+    }
   };
 
   const handleLogout = () => {
@@ -94,17 +102,27 @@ const App: React.FC = () => {
     e.preventDefault();
     setIsAuthLoading(true);
     setErrorMessage(null);
+    setAuthStatus('Verificando credenciales...');
+    
     try {
       const res = await loginUser(authEmail, authPass);
       if (res.success && res.data) {
-        setUser(res.data);
-        localStorage.setItem('fincore_session', JSON.stringify(res.data));
-        await loadInitialData();
+        setAuthStatus('Acceso concedido. Entrando...');
+        // Transición rápida: guardamos sesión y cambiamos UI
+        const userData = res.data;
+        setUser(userData);
+        localStorage.setItem('fincore_session', JSON.stringify(userData));
+        
+        // Iniciamos descarga de datos en paralelo
+        loadInitialData();
       } else {
-        setErrorMessage(res.error || "No autorizado. Verifica tus datos en la hoja USERS.");
+        setErrorMessage(res.error || "No autorizado. Verifica tus datos en Google Sheets.");
       }
+    } catch (err) {
+      setErrorMessage("Error de conexión. Revisa el estado de la red.");
     } finally {
       setIsAuthLoading(false);
+      setAuthStatus('');
     }
   };
 
@@ -112,6 +130,7 @@ const App: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file || !preCategory) return;
     
+    setErrorMessage(null);
     setIsProcessing(true);
     const pUrl = URL.createObjectURL(file);
     setPreviewUrl(pUrl);
@@ -126,14 +145,18 @@ const App: React.FC = () => {
           setCurrentFileBase64(base64Content);
           const result = await processDocument(base64Content, file.type, preCategory);
           setExtractedData(result);
+          setIsProcessing(false);
         } else {
           throw new Error("No se pudo leer el archivo.");
         }
-      } catch (err) {
-        setErrorMessage("⚠️ No se pudo procesar el documento. Intenta con otro formato.");
-      } finally {
+      } catch (err: any) {
+        setErrorMessage(err.message || "⚠️ No se pudo procesar el documento.");
         setIsProcessing(false);
       }
+    };
+    reader.onerror = () => {
+      setErrorMessage("Error al leer el archivo del dispositivo.");
+      setIsProcessing(false);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -166,7 +189,7 @@ const App: React.FC = () => {
   };
 
   const handleDeleteRecord = async (record: FinancialRecord) => {
-    if (confirm(`¿Eliminar definitivamente ${record.invoiceNumber}? Esta acción borrará el archivo de Drive y la fila de Sheets.`)) {
+    if (confirm(`¿Eliminar definitivamente ${record.invoiceNumber}?`)) {
       try {
         await deleteRecordFromExternalDatabase(record.id);
         await deleteFromGoogleSheets(record.invoiceNumber, record.category);
@@ -237,7 +260,7 @@ const App: React.FC = () => {
           <p className="text-slate-400 text-center font-bold text-[10px] uppercase tracking-widest mb-10 italic">Treasury Intelligence</p>
           
           {errorMessage && (
-            <div className="mb-6 p-4 bg-red-50 border-2 border-red-100 rounded-2xl text-red-600 text-[10px] font-black uppercase text-center">
+            <div className="mb-6 p-4 bg-red-50 border-2 border-red-100 rounded-2xl text-red-600 text-[10px] font-black uppercase text-center animate-bounce">
               {errorMessage}
             </div>
           )}
@@ -252,8 +275,13 @@ const App: React.FC = () => {
                <input type="password" required value={authPass} onChange={e => setAuthPass(e.target.value)} className="w-full bg-slate-50 border-2 border-transparent focus:border-[#00838f] rounded-2xl px-5 py-4 font-bold text-sm outline-none transition-all" placeholder="••••••••" />
              </div>
              
-             <button disabled={isAuthLoading} type="submit" className="w-full bg-[#263238] text-white py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-[#00838f] shadow-xl transition-all active:scale-95 mt-4">
-               {isAuthLoading ? 'Autenticando...' : 'Iniciar Auditoría AI'}
+             <button disabled={isAuthLoading} type="submit" className="w-full bg-[#263238] text-white py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-[#00838f] shadow-xl transition-all active:scale-95 mt-4 flex items-center justify-center gap-3">
+               {isAuthLoading ? (
+                 <>
+                   <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                   <span>{authStatus || 'Procesando...'}</span>
+                 </>
+               ) : 'Iniciar Auditoría AI'}
              </button>
           </form>
           <p className="mt-10 text-[8px] text-center text-slate-300 font-bold uppercase tracking-widest">Plataforma de Control Financiero ECCOS.</p>
@@ -268,13 +296,21 @@ const App: React.FC = () => {
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
           <EccosLogo className="cursor-pointer" onClick={() => setView(AppView.UPLOAD)} />
           
-          <nav className="flex gap-1 bg-[#1a252b] p-1 rounded-2xl overflow-x-auto w-full md:w-auto custom-scrollbar no-scrollbar">
-            <button onClick={() => { setView(AppView.UPLOAD); resetFlow(); }} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.UPLOAD ? 'bg-[#00838f] text-white shadow-xl' : 'text-slate-500 hover:text-white'}`}>AUDITORÍA</button>
-            <button onClick={() => setView(AppView.TABLE)} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.TABLE ? 'bg-[#4a4a49] text-white shadow-xl' : 'text-slate-500 hover:text-white'}`}>TESORERÍA</button>
-            <button onClick={() => setView(AppView.BANCOS)} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.BANCOS ? 'bg-[#1a252b] text-slate-400 border border-slate-700' : 'text-slate-500'}`}>BANCOS</button>
-            <button onClick={() => setView(AppView.DASHBOARD)} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.DASHBOARD ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-500 hover:text-white'}`}>MÉTRICAS</button>
-            <button onClick={handleLogout} className="whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-400 ml-2">SALIR</button>
-          </nav>
+          <div className="flex items-center gap-4">
+            {isDataLoading && (
+              <div className="hidden md:flex items-center gap-2 bg-[#1a252b] px-4 py-2 rounded-full border border-slate-700">
+                <div className="w-2 h-2 bg-[#a6ce39] rounded-full animate-pulse"></div>
+                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Sincronizando Registros...</span>
+              </div>
+            )}
+            <nav className="flex gap-1 bg-[#1a252b] p-1 rounded-2xl overflow-x-auto w-full md:w-auto custom-scrollbar no-scrollbar">
+              <button onClick={() => { setView(AppView.UPLOAD); resetFlow(); }} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.UPLOAD ? 'bg-[#00838f] text-white shadow-xl' : 'text-slate-500 hover:text-white'}`}>AUDITORÍA</button>
+              <button onClick={() => setView(AppView.TABLE)} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.TABLE ? 'bg-[#4a4a49] text-white shadow-xl' : 'text-slate-500 hover:text-white'}`}>TESORERÍA</button>
+              <button onClick={() => setView(AppView.BANCOS)} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.BANCOS ? 'bg-[#1a252b] text-slate-400 border border-slate-700' : 'text-slate-500'}`}>BANCOS</button>
+              <button onClick={() => setView(AppView.DASHBOARD)} className={`whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === AppView.DASHBOARD ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-500 hover:text-white'}`}>MÉTRICAS</button>
+              <button onClick={handleLogout} className="whitespace-nowrap flex-shrink-0 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest text-red-400 ml-2">SALIR</button>
+            </nav>
+          </div>
         </div>
       </header>
 
@@ -287,6 +323,7 @@ const App: React.FC = () => {
                 <h2 className="text-2xl font-black uppercase tracking-tighter text-[#263238]">
                   {isSyncing ? 'Sincronizando con ECCOS Cloud...' : 'IA Analizando Factura...'}
                 </h2>
+                <p className="mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Esto puede tomar unos segundos</p>
               </div>
             ) : successMessage ? (
               <div className="max-w-4xl mx-auto bg-white p-12 md:p-24 rounded-[50px] text-center shadow-2xl border-t-8 border-[#a6ce39] animate-fadeIn">
@@ -308,21 +345,28 @@ const App: React.FC = () => {
             ) : extractedData && preCategory ? (
               <ClassificationForm data={extractedData} initialCategory={preCategory} onSave={onRecordSaved} onCancel={resetFlow} previewUrl={previewUrl || undefined} fileMime={currentFileMime || undefined} />
             ) : preCategory ? (
-              <div className="max-w-4xl mx-auto bg-white border-4 border-dashed border-slate-200 rounded-[50px] p-16 md:p-32 text-center relative animate-fadeIn transition-all shadow-sm">
-                <div className="relative group cursor-pointer border-4 border-slate-50 rounded-[40px] p-16 hover:border-[#00838f] transition-all bg-slate-50/30">
-                  <input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={handleFileUpload} accept="image/*,application/pdf" />
-                  <div className="w-20 h-20 bg-[#00838f]/10 text-[#00838f] rounded-3xl flex items-center justify-center mx-auto mb-8">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <div className="max-w-4xl mx-auto space-y-8 animate-fadeIn">
+                {errorMessage && (
+                  <div className="p-8 bg-red-50 border-4 border-red-100 rounded-[30px] text-red-600 text-center font-black uppercase text-[11px] tracking-widest animate-pulse">
+                    ⚠️ ERROR EN EL ANÁLISIS: <br/> {errorMessage}
                   </div>
-                  <p className="text-2xl font-black uppercase tracking-tighter text-[#263238]">Adjuntar {preCategory === TransactionCategory.INGRESO ? 'Venta' : 'Egreso'}</p>
-                  <p className="text-slate-400 font-bold text-[11px] mt-4 uppercase tracking-widest">Soporta PDF, JPG, PNG y Captura de Cámara</p>
+                )}
+                <div className="bg-white border-4 border-dashed border-slate-200 rounded-[50px] p-16 md:p-32 text-center relative transition-all shadow-sm">
+                  <div className="relative group cursor-pointer border-4 border-slate-50 rounded-[40px] p-16 hover:border-[#00838f] transition-all bg-slate-50/30">
+                    <input type="file" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={handleFileUpload} accept="image/*,application/pdf" />
+                    <div className="w-20 h-20 bg-[#00838f]/10 text-[#00838f] rounded-3xl flex items-center justify-center mx-auto mb-8">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    </div>
+                    <p className="text-2xl font-black uppercase tracking-tighter text-[#263238]">Adjuntar {preCategory === TransactionCategory.INGRESO ? 'Venta' : 'Egreso'}</p>
+                    <p className="text-slate-400 font-bold text-[11px] mt-4 uppercase tracking-widest">Soporta PDF, JPG, PNG y Captura de Cámara</p>
+                  </div>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); resetFlow(); }} 
+                    className="mt-16 relative z-50 inline-block text-[11px] font-black text-white uppercase tracking-[0.2em] bg-[#4a4a49] px-14 py-6 rounded-full hover:bg-red-600 transition-all shadow-2xl active:scale-95"
+                  >
+                    ← REGRESAR
+                  </button>
                 </div>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); resetFlow(); }} 
-                  className="mt-16 relative z-50 inline-block text-[11px] font-black text-white uppercase tracking-[0.2em] bg-[#4a4a49] px-14 py-6 rounded-full hover:bg-red-600 transition-all shadow-2xl active:scale-95"
-                >
-                  ← REGRESAR
-                </button>
               </div>
             ) : (
               <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-8 md:gap-14 animate-fadeIn pt-10">
