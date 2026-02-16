@@ -4,8 +4,9 @@ import { ExtractedData, FinancialRecord, ApiResponse, TransactionCategory, Payme
 import { supabase } from "./supabaseClient";
 
 const getApiKey = () => {
+  // En Vite, process.env es inyectado por el config durante el build
   const key = process.env.API_KEY;
-  if (!key || key === "" || key === "undefined") return null;
+  if (!key || key === "" || key === "undefined" || key === "null") return null;
   return key;
 };
 
@@ -21,7 +22,7 @@ const cleanJsonResponse = (text: string): string => {
 export const processDocument = async (base64: string, mimeType: string, category: TransactionCategory): Promise<ExtractedData> => {
   const apiKey = getApiKey();
   if (!apiKey) {
-    throw new Error("ERROR CRÍTICO: No se detectó la API_KEY de Gemini. Asegúrate de que esté configurada en Vercel antes del despliegue.");
+    throw new Error("CONFIG_MISSING: No se detectó la llave API_KEY en el despliegue actual. Por favor, realiza un 'Redeploy' con 'Clear Cache' en Vercel.");
   }
   
   const ai = new GoogleGenAI({ apiKey });

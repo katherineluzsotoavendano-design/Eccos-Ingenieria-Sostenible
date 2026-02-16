@@ -55,6 +55,7 @@ const App: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastSavedRecord, setLastSavedRecord] = useState<FinancialRecord | null>(null);
+  const [hasApiKey, setHasApiKey] = useState<boolean>(true);
   
   const [currentFileBase64, setCurrentFileBase64] = useState<string | null>(null);
   const [currentFileMime, setCurrentFileMime] = useState<string | null>(null);
@@ -64,13 +65,18 @@ const App: React.FC = () => {
   const [authPass, setAuthPass] = useState('');
 
   useEffect(() => {
+    // Verificar si la API_KEY está disponible
+    const key = process.env.API_KEY;
+    if (!key || key === "" || key === "undefined") {
+      setHasApiKey(false);
+    }
+
     const checkSession = async () => {
       const savedSession = localStorage.getItem('fincore_session');
       if (savedSession) {
         try {
           const parsedUser = JSON.parse(savedSession);
           setUser(parsedUser);
-          // Carga datos en background
           loadInitialData();
         } catch (e) {
           localStorage.removeItem('fincore_session');
@@ -107,19 +113,16 @@ const App: React.FC = () => {
     try {
       const res = await loginUser(authEmail, authPass);
       if (res.success && res.data) {
-        setAuthStatus('Acceso concedido. Entrando...');
-        // Transición rápida: guardamos sesión y cambiamos UI
+        setAuthStatus('Acceso concedido...');
         const userData = res.data;
         setUser(userData);
         localStorage.setItem('fincore_session', JSON.stringify(userData));
-        
-        // Iniciamos descarga de datos en paralelo
         loadInitialData();
       } else {
-        setErrorMessage(res.error || "No autorizado. Verifica tus datos en Google Sheets.");
+        setErrorMessage(res.error || "No autorizado.");
       }
     } catch (err) {
-      setErrorMessage("Error de conexión. Revisa el estado de la red.");
+      setErrorMessage("Error de conexión.");
     } finally {
       setIsAuthLoading(false);
       setAuthStatus('');
@@ -127,6 +130,10 @@ const App: React.FC = () => {
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!hasApiKey) {
+      setErrorMessage("⚠️ ERROR CRÍTICO: La API_KEY no está configurada. Contacta a soporte.");
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file || !preCategory) return;
     
@@ -150,12 +157,12 @@ const App: React.FC = () => {
           throw new Error("No se pudo leer el archivo.");
         }
       } catch (err: any) {
-        setErrorMessage(err.message || "⚠️ No se pudo procesar el documento.");
+        setErrorMessage(err.message || "⚠️ Error en el análisis.");
         setIsProcessing(false);
       }
     };
     reader.onerror = () => {
-      setErrorMessage("Error al leer el archivo del dispositivo.");
+      setErrorMessage("Error al leer el archivo.");
       setIsProcessing(false);
     };
     reader.readAsDataURL(file);
@@ -172,14 +179,14 @@ const App: React.FC = () => {
       await saveToExternalDatabase(recordWithUrl);
       
       if (cloudRes.success) {
-        setSuccessMessage("✅ REGISTRO ÉXITOSO: Guardado en Sheets y Drive.");
+        setSuccessMessage("✅ REGISTRO ÉXITOSO");
       } else {
-        setErrorMessage(cloudRes.error || "Error al sincronizar con Sheets.");
+        setErrorMessage(cloudRes.error || "Error al sincronizar.");
       }
       setLastSavedRecord(recordWithUrl);
       setRecords([recordWithUrl, ...records]);
     } catch (err) {
-      setErrorMessage("Error de comunicación con el servidor.");
+      setErrorMessage("Error de comunicación.");
     } finally {
       setIsSyncing(false);
       setExtractedData(null);
@@ -207,13 +214,13 @@ const App: React.FC = () => {
       await handleDeleteRecord(lastSavedRecord);
       setIsSyncing(false);
       resetFlow();
-      setSuccessMessage("🗑️ REGISTRO ELIMINADO CORRECTAMENTE.");
+      setSuccessMessage("🗑️ REGISTRO ELIMINADO.");
       setTimeout(() => setSuccessMessage(null), 3000);
     }
   };
 
   const handleDeleteAll = async () => {
-    if (confirm("⚠️ ¿ESTÁS SEGURO? Se borrará TODO de la base de datos.")) {
+    if (confirm("⚠️ ¿ESTÁS SEGURO?")) {
       const res = await deleteAllRecordsFromExternalDatabase();
       if (res.success) {
         setRecords([]);
@@ -300,7 +307,7 @@ const App: React.FC = () => {
             {isDataLoading && (
               <div className="hidden md:flex items-center gap-2 bg-[#1a252b] px-4 py-2 rounded-full border border-slate-700">
                 <div className="w-2 h-2 bg-[#a6ce39] rounded-full animate-pulse"></div>
-                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Sincronizando Registros...</span>
+                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Sincronizando...</span>
               </div>
             )}
             <nav className="flex gap-1 bg-[#1a252b] p-1 rounded-2xl overflow-x-auto w-full md:w-auto custom-scrollbar no-scrollbar">
@@ -315,13 +322,22 @@ const App: React.FC = () => {
       </header>
 
       <main className="flex-grow w-full max-w-7xl mx-auto p-4 md:p-10">
+        {!hasApiKey && (
+          <div className="mb-10 bg-red-600 text-white p-8 rounded-[30px] shadow-2xl animate-pulse">
+            <h3 className="font-black text-xl uppercase italic">⚠️ Error de Configuración Crítico</h3>
+            <p className="font-bold text-[11px] uppercase tracking-widest mt-2 opacity-80">
+              No se ha detectado la llave de IA (API_KEY). Por favor, ve a Vercel, agrega la variable de entorno y haz un 'Redeploy' con 'Clear Cache'.
+            </p>
+          </div>
+        )}
+
         {view === AppView.UPLOAD && (
           <div className="w-full">
             {isProcessing || isSyncing ? (
               <div className="max-w-4xl mx-auto bg-white p-16 md:p-32 rounded-[50px] shadow-2xl text-center animate-fadeIn border-t-8 border-[#00838f]">
                 <div className="w-20 h-20 border-[8px] border-slate-100 border-t-[#a6ce39] rounded-full animate-spin mx-auto mb-10"></div>
                 <h2 className="text-2xl font-black uppercase tracking-tighter text-[#263238]">
-                  {isSyncing ? 'Sincronizando con ECCOS Cloud...' : 'IA Analizando Factura...'}
+                  {isSyncing ? 'Sincronizando...' : 'IA Analizando Factura...'}
                 </h2>
                 <p className="mt-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Esto puede tomar unos segundos</p>
               </div>
@@ -329,16 +345,10 @@ const App: React.FC = () => {
               <div className="max-w-4xl mx-auto bg-white p-12 md:p-24 rounded-[50px] text-center shadow-2xl border-t-8 border-[#a6ce39] animate-fadeIn">
                 <div className="w-24 h-24 bg-[#a6ce39]/10 text-[#a6ce39] rounded-[40px] flex items-center justify-center mx-auto mb-12 text-5xl font-black shadow-inner">✓</div>
                 <p className="text-2xl font-black mb-12 uppercase tracking-tighter text-[#263238]">{successMessage}</p>
-                
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <button onClick={resetFlow} className="bg-[#263238] text-white px-12 py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] hover:bg-[#00838f] shadow-2xl transition-all active:scale-95">Siguiente Auditoría</button>
+                  <button onClick={resetFlow} className="bg-[#263238] text-white px-12 py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] hover:bg-[#00838f] shadow-2xl transition-all active:scale-95">Siguiente</button>
                   {lastSavedRecord && (
-                    <button 
-                      onClick={handleDeleteLastSaved}
-                      className="bg-red-50 text-red-600 border-2 border-red-100 px-12 py-6 rounded-3xl font-black uppercase tracking-widest text-[11px] hover:bg-red-600 hover:text-white transition-all shadow-sm active:scale-95"
-                    >
-                      Eliminar por Error
-                    </button>
+                    <button onClick={handleDeleteLastSaved} className="bg-red-50 text-red-600 border-2 border-red-100 px-12 py-6 rounded-3xl font-black uppercase text-[11px] active:scale-95">Eliminar Error</button>
                   )}
                 </div>
               </div>
@@ -347,8 +357,8 @@ const App: React.FC = () => {
             ) : preCategory ? (
               <div className="max-w-4xl mx-auto space-y-8 animate-fadeIn">
                 {errorMessage && (
-                  <div className="p-8 bg-red-50 border-4 border-red-100 rounded-[30px] text-red-600 text-center font-black uppercase text-[11px] tracking-widest animate-pulse">
-                    ⚠️ ERROR EN EL ANÁLISIS: <br/> {errorMessage}
+                  <div className="p-8 bg-red-50 border-4 border-red-100 rounded-[30px] text-red-600 text-center font-black uppercase text-[11px] tracking-widest">
+                    ⚠️ {errorMessage}
                   </div>
                 )}
                 <div className="bg-white border-4 border-dashed border-slate-200 rounded-[50px] p-16 md:p-32 text-center relative transition-all shadow-sm">
@@ -358,14 +368,9 @@ const App: React.FC = () => {
                       <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                     </div>
                     <p className="text-2xl font-black uppercase tracking-tighter text-[#263238]">Adjuntar {preCategory === TransactionCategory.INGRESO ? 'Venta' : 'Egreso'}</p>
-                    <p className="text-slate-400 font-bold text-[11px] mt-4 uppercase tracking-widest">Soporta PDF, JPG, PNG y Captura de Cámara</p>
+                    <p className="text-slate-400 font-bold text-[11px] mt-4 uppercase tracking-widest italic">Soporta PDF, JPG, PNG</p>
                   </div>
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); resetFlow(); }} 
-                    className="mt-16 relative z-50 inline-block text-[11px] font-black text-white uppercase tracking-[0.2em] bg-[#4a4a49] px-14 py-6 rounded-full hover:bg-red-600 transition-all shadow-2xl active:scale-95"
-                  >
-                    ← REGRESAR
-                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); resetFlow(); }} className="mt-16 text-[11px] font-black text-white uppercase tracking-[0.2em] bg-[#4a4a49] px-14 py-6 rounded-full shadow-2xl active:scale-95">← REGRESAR</button>
                 </div>
               </div>
             ) : (
@@ -373,12 +378,12 @@ const App: React.FC = () => {
                 <button onClick={() => setPreCategory(TransactionCategory.INGRESO)} className="group bg-white p-14 md:p-20 rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-b-8 border-transparent hover:border-[#00838f]">
                   <div className="w-16 h-16 bg-[#00838f]/10 text-[#00838f] rounded-3xl flex items-center justify-center mb-10 text-4xl font-black shadow-inner">+</div >
                   <h3 className="text-3xl font-black tracking-tighter mb-4 uppercase text-[#263238]">Ingresos</h3>
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest italic">Facturación de Proyectos Eccos</p>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest italic">Facturación de Proyectos</p>
                 </button>
                 <button onClick={() => setPreCategory(TransactionCategory.EGRESO)} className="group bg-white p-14 md:p-20 rounded-[60px] shadow-sm hover:shadow-2xl transition-all text-left border-b-8 border-transparent hover:border-[#a6ce39]">
                   <div className="w-16 h-16 bg-[#a6ce39]/10 text-[#a6ce39] rounded-3xl flex items-center justify-center mb-10 text-4xl font-black shadow-inner">−</div >
                   <h3 className="text-3xl font-black tracking-tighter mb-4 uppercase text-[#263238]">Egresos</h3>
-                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest italic">Compras, Servicios y Gastos Operativos</p>
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest italic">Gastos Operativos</p>
                 </button>
               </div>
             )}
